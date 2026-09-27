@@ -12,9 +12,14 @@ GIT_COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
 # specific model's resource ID, so reload-check gets its own defaults here.
 MODEL ?= projects/126202218664/locations/asia-southeast1/models/437231793901404160
 VERSION ?= production
+LAB ?= 1
+ENDPOINT ?= itcs355-predict
+INSTANCE ?= 1-512Mi
+MAX_INSTANCES ?= 2
 
 .PHONY: help setup cloud-check data test portability-audit train image image-push reproduce verify clean teardown \
-        train-remote tune tune-remote compare reload-check serve serve-image loadtest drift inject-drift pipeline cost swap-check llm-eval llm-gate
+        train-remote tune tune-remote compare reload-check serve serve-image loadtest deploy smoke \
+        drift inject-drift pipeline cost swap-check llm-eval llm-gate
 
 help:
 	@grep -E "^[a-zA-Z_-]+:.*?## .*$$" $(MAKEFILE_LIST) | awk -F":.*?## " "{printf \"  %-20s %s\\n\", \$$1, \$$2}"
@@ -56,9 +61,9 @@ reproduce: data image ## THE ONE COMMAND. Grader runs this.
 verify: ## Check the produced metric against the README claim
 	python scripts/verify_metric.py
 
-teardown: ## Delete every resource tagged course=itcs355 for this lab
+teardown: ## Delete every resource tagged course=itcs355 for this lab. LAB=3 for Cloud Run.
 	python -c "from src import config; from cloudlayer.factory import get_adapter; \
-	cfg=config.load(); print(get_adapter(cfg).teardown(cfg.tags(1)))"
+	cfg=config.load(); print(get_adapter(cfg).teardown(cfg.tags($(LAB))))"
 
 clean: ## Remove local artifacts
 	rm -rf mlruns mlartifacts mlflow.db reports/metrics.json .pytest_cache
@@ -92,6 +97,14 @@ serve: ## Run the inference service locally on :8080
 
 serve-image: ## Build the serving image
 	docker buildx build --platform $(PLATFORM) -f service/Dockerfile.serve -t itcs355-serve:$(TAG) --load .
+
+deploy: serve-image ## Push the serving image and deploy to Cloud Run. BILLED — add YES=1 to actually create it.
+	python scripts/deploy_service.py --model $(MODEL) --version $(VERSION) \
+	  --endpoint $(ENDPOINT) --image itcs355-serve:$(TAG) --instance $(INSTANCE) \
+	  --max-instances $(MAX_INSTANCES) $(if $(YES),--yes,)
+
+smoke: ## adapter.invoke() against $(ENDPOINT) with 3 known payloads (single, batch, invalid->422)
+	python scripts/smoke_test.py --endpoint-name $(ENDPOINT)
 
 loadtest: ## Load test at three concurrency levels
 	@for vus in 1 10 50; do \
