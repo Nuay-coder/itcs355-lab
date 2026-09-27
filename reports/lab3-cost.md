@@ -2,51 +2,36 @@
 
 ## Method
 
-`src/costs.cost_per_1k_predictions(hourly_thb, throughput_rps, utilisation)` — existing
-function, no new script needed.
+Computed with `src/costs.cost_per_1k_predictions(hourly_thb, throughput_rps, utilisation)`:
+
+```
+cost per 1,000 = hourly rate × (1,000 ÷ (throughput × utilisation)) ÷ 3,600
+```
 
 | Input | Value | Source |
 |---|---|---|
-| Instance hourly rate | 4.23 THB/hr | `reports/lab3-load.md`, 1 vCPU/512MiB Cloud Run active rate |
-| Throughput | 96.5 req/s | `reports/lab3-load.md`, measured at VUS=10 — the concurrency level that met the stated p95≤200ms target |
-| Utilisation assumption | **0.05 (5%)** | Not specified by the handout — our own call. This endpoint has no real production traffic (lab exercise only); 5% reflects intermittent test usage, not a continuously-loaded service. |
+| Instance hourly rate | 4.23 THB/hr | 1 vCPU / 512 MiB Cloud Run, active rate (`reports/lab3-load.md`) |
+| Throughput | 96.5 req/s | Measured at concurrency 10, the level that met my p95 ≤ 200 ms target |
+| Utilisation | **5%** | My own assumption (see below) |
 
 ```
-cost_per_1k_predictions(4.23, 96.5, 0.05) = 0.2435 THB per 1,000 predictions
+4.23 × (1,000 ÷ (96.5 × 0.05)) ÷ 3,600 = 0.2435 THB
 ```
 
-## Result
+**Result: 0.2435 THB per 1,000 predictions.**
 
-**0.2435 THB per 1,000 predictions**, at the stated utilisation assumption of 5%.
+## Why 5% utilisation
 
-## Batch breakeven (2 lines)
+The handout doesn't set a value, so this is my choice. This endpoint has never served real
+users. Throughout the lab it only handled short bursts of test traffic (smoke tests, load
+tests, the canary run) and sat idle the rest of the time. 5% means the endpoint does useful
+work for about 1.2 hours' worth of its full measured capacity each day, which matches that
+pattern better than a production-style figure like 25% or 80%.
 
-`src/costs.batch_breakeven_rps(endpoint_hourly_thb, batch_job_thb, batch_runs_per_day=1)`,
-using the Lab 2 training job's real cost (0.1372 THB/run) as a stand-in for a batch
-job's cost — the handout doesn't specify this either, and no real batch inference job
-was run to measure directly:
+This is the most fragile input in the calculation: cost per 1,000 scales inversely with
+utilisation, so at 100% it would be 20 times cheaper (about 0.012 THB).
 
-Below **~0.0012 req/s (~101 requests/day)**, scheduled batch inference is cheaper than
-keeping this endpoint warm continuously at 4.23 THB/hr — an order of magnitude lower
-than what most people expect before checking.
+## When is batch inference cheaper than keeping the endpoint warm?
 
-## Teardown
-
-`make teardown LAB=3` run and confirmed:
-
-- Deleted: `cloud-run:itcs355-predict` (the only resource tagged `lab=3`)
-- `gcloud run services list --region=asia-southeast1` → 0 items
-- IAM: no `roles/iam.serviceAccountTokenCreator` or `roles/run.invoker` bindings remain,
-  on the training service account or at project level
-- Registered model versions confirmed intact (teardown is scoped to Cloud Run only):
-  `itcs355-lab2-sensor-risk` (`437231793901404160@1`, alias `production`) and the canary
-  model (`109031971056779264@1`, alias `staging`) both still present
-- `make portability-audit`: passed
-- `make test`: 37 passed
-- `git status`: no `cloud.env` present
-
-A real bug was found and fixed during this teardown: `GcpAdapter.teardown()`'s Cloud Run
-list filter used `labels.<key>=<value>`, which silently matches nothing (`gcloud run
-services list` needs `metadata.labels.<key>=<value>` instead) — the mismatch surfaced
-because `stdout`/`stderr` were merged, so the resulting gcloud warning got parsed as if
-it were a service name and handed to `delete`. Fixed in `cloudlayer/gcp.py`.
+Below about 100 requests per day (~0.0012 req/s), a scheduled batch job is cheaper than keeping this endpoint warm.
+Staying warm costs about 101.5 THB a day regardless of traffic, while one daily batch run costs about 0.14 THB (estimated from the Lab 2 training job, since no batch scoring job was built in this lab).
