@@ -1,0 +1,6 @@
+{
+  "canary_start_ts": "2026-09-26T16:50:27.347061+00:00",
+  "rate_req_s": 60.0,
+  "duration_seconds": 1350,
+  "endpoint": "itcs355-predict"
+}
