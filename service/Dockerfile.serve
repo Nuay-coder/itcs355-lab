@@ -1,15 +1,17 @@
 # ITCS355 Lab 3 — serving image
 #
-# TODO(Lab 3): pin by digest, as you did for the training image in Lab 1.
-FROM python:3.11-slim AS builder
+# Base image pinned by digest, not tag. `python:3.11-slim` moves; the digest below is
+# the exact manifest resolved on 2026-09-26 with:
+#   docker pull python:3.11-slim && docker inspect --format='{{index .RepoDigests 0}}' python:3.11-slim
+FROM python@sha256:e41613d42d4891e4930f79523f93f81bbc7632584ec65e36ab055f41a800b41e AS builder
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /build
 COPY requirements-serve.txt ./
-RUN pip install --prefix=/install -r requirements-serve.txt
+RUN pip install --require-hashes --prefix=/install -r requirements-serve.txt
 
-FROM python:3.11-slim AS runtime
+FROM python@sha256:e41613d42d4891e4930f79523f93f81bbc7632584ec65e36ab055f41a800b41e AS runtime
 RUN useradd --create-home --uid 10001 runner
-ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app PORT=8080
 COPY --from=builder /install /usr/local
 WORKDIR /app
 COPY --chown=runner:runner service/ ./service/
@@ -18,10 +20,11 @@ COPY --chown=runner:runner cloudlayer/ ./cloudlayer/
 USER runner
 
 EXPOSE 8080
-# TODO(Lab 3): your provider expects specific health and predict paths.
+# Cloud Run injects the listen port via $PORT; shell form so it actually expands.
+# TODO(Lab 3, Task 2): your provider expects specific health and predict paths.
 #   AWS SageMaker  -> /ping and /invocations
 #   Azure ML       -> configurable liveness route on the deployment
 #   Vertex AI      -> health and predict routes declared on the Model resource
-# Absorb the difference in cloudlayer/, or map the paths here. Do NOT rename the routes
-# in service/app.py — that is what makes the image non-portable.
-CMD ["uvicorn", "service.app:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2"]
+# Absorb the difference in cloudlayer/, or map the paths at deploy time. Do NOT rename
+# the routes in service/app.py — that is what makes the image non-portable.
+CMD ["sh", "-c", "uvicorn service.app:app --host 0.0.0.0 --port ${PORT} --workers 2"]

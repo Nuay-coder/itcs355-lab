@@ -1,0 +1,15 @@
+# Source of truth. Compile to requirements-serve.txt WITH HASHES:
+#   uv pip compile --generate-hashes --python-version 3.11 --python-platform x86_64-manylinux_2_28 -o requirements-serve.txt requirements-serve.in
+# Commit both files. The lock file is what makes the build reproducible.
+#
+# Deliberately smaller than requirements.txt: no mlflow, no training-only deps. The
+# service loads the model via adapter.download() (google-cloud-storage) + joblib, never
+# via mlflow's own model registry.
+fastapi==0.141.1
+uvicorn==0.34.0
+pydantic==2.13.5
+pandas==3.0.2
+numpy==2.4.4
+scikit-learn==1.8.0
+joblib==1.4.2
+google-cloud-storage==3.14.1

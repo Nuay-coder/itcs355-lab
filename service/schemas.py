@@ -23,14 +23,23 @@ class PredictRequest(BaseModel):
 
 
 class PredictResponse(BaseModel):
+    prediction: int
     probability: float
     model_version: str
+    request_id: str
 
 
 class BatchRequest(BaseModel):
     rows: list[PredictRequest] = Field(..., min_length=1, max_length=100)
 
 
+class PredictionItem(BaseModel):
+    prediction: int
+    probability: float
+
+
 class BatchResponse(BaseModel):
-    probabilities: list[float]
+    predictions: list[PredictionItem]
     model_version: str
+    request_id: str
+    n: int
