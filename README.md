@@ -135,6 +135,15 @@ correctness bug wearing a reproducibility costume.
 
 ---
 
+## Notes for the grader
+
+`make reproduce` runs entirely offline against the DVC-tracked, deterministically-generated
+dataset — no cloud credentials required for that command. The RandomForest is fit with
+`n_jobs=-1`; scikit-learn seeds each tree from the master `random_state` independently of thread
+scheduling, so *tree structure* is unaffected.
+
+---
+
 ## Checklist before you submit — Lab 1
 
 - [x] `make reproduce` works from a fresh clone, on a machine that is not yours
@@ -153,26 +162,6 @@ course, and rotating it is your responsibility, not the grader's.
 ---
 
 ## Lab 2 — Experiment Tracking and Model Registry
-
-- Moved training onto Vertex AI managed compute (`submit_training`/`wait_training`,
-  `cloudlayer/gcp.py`, `aiplatform_v1` — the low-level client, not the convenience
-  wrapper). Getting the first submission through surfaced the submit-time vs. run-time
-  identity gap the lab warns about: the API was disabled on the project, and the job's
-  run-time identity needs a real service account, not the user account that submits
-  it — `cloud.env` now carries `TRAINING_SERVICE_ACCOUNT` separately from
-  `IDENTITY_REF` for that reason. The job reads/writes only through `BLOB_URI`
-  (`entrypoint.sh` runs `dvc pull` before training if the data isn't already present).
-- Ran a 12-trial hyperparameter sweep (`n_estimators`, `max_depth`, `min_samples_leaf`)
-  on spot compute, checkpointed and resumable — proven for real, not just in theory,
-  when two trials hit a network error mid-sweep and a plain rerun picked them up
-  cleanly from the checkpoint.
-- Followed up with a seed-variance check on the sweep's top two candidates: the
-  seed-to-seed spread turned out to be several times larger than the gap that had
-  separated them on a single seed, so that ranking wasn't real signal.
-- Registered the selected model in Vertex AI Model Registry with full lineage, and
-  promoted it through a staging step (below).
-- Proved the registered model reloads and scores correctly straight from the registry —
-  no local file, no cache.
 
 **Cost breakdown**
 
@@ -250,24 +239,13 @@ something that outlives Vertex's own mutable alias state):
 
 ---
 
-## Notes for the grader
+## Lab 3 — Serving, Load Testing, and Rollback
 
-### Lab 1
+What each report in `reports/` covers:
 
-`make reproduce` runs entirely offline against the DVC-tracked, deterministically-generated
-dataset — no cloud credentials required for that command. The RandomForest is fit with
-`n_jobs=-1`; scikit-learn seeds each tree from the master `random_state` independently of thread
-scheduling, so *tree structure* is unaffected.
+- [`reports/lab3-load.md`](reports/lab3-load.md) — load test results and the latency target.
+- [`reports/lab3-canary.md`](reports/lab3-canary.md) — canary detection design and outcome.
+- [`reports/lab3-canary-evidence.md`](reports/lab3-canary-evidence.md) — timestamped rollback evidence.
+- [`reports/lab3-cost.md`](reports/lab3-cost.md) — cost per 1,000 predictions and the batch-vs-warm breakeven.
 
-### Lab 2
-
-`make image-push` and `dvc push` require `gcloud auth login` as `jinnaput.jaiphoom@gmail.com`
-against project `itcs355-6688033`; the Artifact Registry repo and GCS bucket are provisioned under
-that project's default region (`asia-southeast1`).
-
-**Correction from Lab 2 Task 4:** `predict_proba` output is not bit-exact across runs under
-`n_jobs=-1` — reconstructing the registered model (same commit, same data, same seed) reproduced
-`val_roc_auc`/`test_roc_auc` to within 0.00006, not exactly. Averaging per-tree probabilities in
-parallel is sensitive to thread-scheduling-dependent summation order; this is float noise, not a
-different model, and is well inside the tolerance this README already claims above, but the
-determinism claim as originally written was too strong.
+---

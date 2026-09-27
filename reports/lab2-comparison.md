@@ -61,3 +61,31 @@ Cost 0.1372 THB per training run (n1-standard-4, spot). Monthly retraining: ~0.1
 
 The grid covers only 12 sparse combinations, and seed variance was checked on just 2 of them; an untested config could outperform both. All results come from one dataset snapshot and split, and may not generalize under data drift.
 
+## Pricing verification
+
+I added this section on 2026-09-27, closing a TODO that had been sitting open since this
+report was first written on 2026-09-18 — `PRICE_TABLE`'s rates were starting values I'd
+never actually checked against GCP's own pricing.
+
+I couldn't load Google's official pricing page directly, so I checked three independent
+aggregators that pull from Google's public price-list API (devzero.io,
+gcloud-compute.com, sparecores.com). All three agreed.
+
+`n1-standard-4`, `asia-southeast1`:
+
+| | Starting value in `PRICE_TABLE` | What I found (2026-09-27) | Difference |
+|---|---|---|---|
+| On-demand | 7.6 THB/hr | 7.78 THB/hr | +2.4% |
+| Spot | 2.28 THB/hr | 2.07 THB/hr | ~9–10% |
+
+I left `PRICE_TABLE` as it was rather than updating it. The difference only moves total
+spend from 1.7858 to about 1.71 THB because a small fraction of the 150 THB budget, and not
+enough to change anything above. Spot pricing isn't fixed either (Google can adjust it
+roughly every 30 days per instance), so what I found today is just a snapshot, not
+something more authoritative than the number it's being checked against.
+
+One honest limit: this check happened after training, not during it. The 0.1372 THB
+figure above reflects whatever GCP was actually charging on 2026-09-18, and spot prices
+aren't published historically, so I can't go back and confirm that rate directly. The
+numbers above are the closest I can verify now, not a reconstruction of that day's
+actual price.
