@@ -176,25 +176,8 @@ course, and rotating it is your responsibility, not the grader's.
 
 **Cost breakdown**
 
-| Source | Jobs | Cost (THB) |
-|---|---:|---:|
-| Task 2 main sweep (MLflow-tracked, spot) | 12 | 1.7858 |
-| Task 3 seed-variance check (MLflow-tracked, spot) | 8 | 1.1396 |
-| Task 1 troubleshooting job (on-demand, `SERVICE_DISABLED`-era failure) | 1 | 1.8468 |
-| Task 1 final validation job (on-demand) | 1 | 0.4140 |
-| Orphaned Task 2 trial (succeeded on Vertex, never logged) | 1 | 0.1419 |
-| **Total** | **23** | **5.3281** |
-
-**5.3281 of 150 THB budget.** Reconciled directly against every real Vertex job
-(`gcloud ai custom-jobs list`) cross-checked against MLflow's logged `cost_thb` — not
-the sweep scripts' own running totals alone, which caught one succeeded-but-never-logged
-job and don't cover the two Task 1 jobs that predate cost
-logging. Model Registry storage and API calls from Task 4/5 are not
-separately itemized — a few KB of GCS storage and free-tier API calls, below the
-precision this reconciliation is tracking at.
-
-Trial-by-trial numbers, the full comparison table, and the model-selection
-justification are in [`reports/lab2-comparison.md`](reports/lab2-comparison.md).
+Trial-by-trial cost, the full comparison table, and the model-selection justification are
+in [`reports/lab2-comparison.md`](reports/lab2-comparison.md).
 
 ### Task 4 — Model Registry
 
@@ -205,15 +188,11 @@ Registered via `cloudlayer.gcp.GcpAdapter.register_model()` (Vertex AI Model Reg
 **Version string:** `projects/126202218664/locations/asia-southeast1/models/437231793901404160@1`
 
 **The artifact sitting at `artifact_uri` is not the original job's own output.** That job's compute
-had already been torn down by the time Task 4 started, and its container's MLflow store —
-including the fitted model it produced — was ephemeral and never uploaded anywhere durable, so
-there was no original file left to register. `register_best_model.py` retrains a fresh model
-instead — same git commit, same data fingerprint, same seed, same hyperparameters as the original
-run — uploads *that* retrained model to `artifact_uri` itself, and only calls `register_model()` if
-the retrained val/test metrics land within 0.0010 of the ones already recorded in MLflow for the
-original run. They did, to within 0.00006 (see the correction above): a `RandomForestClassifier`
-with a fixed `random_state` reproduces the same model, not bit-for-bit, but within that verified
-tolerance.
+had already been torn down by the time Task 4 started, so there was no original file left to
+register. `register_best_model.py` retrains a fresh model instead — same git commit, same data
+fingerprint, same seed, same hyperparameters as the original run — and only calls
+`register_model()` once the retrained val/test metrics land within 0.0010 of the ones already
+recorded in MLflow for the original run. They did, to within 0.00006.
 
 `training_job_id` and `mlflow_run_id` below still identify the *original* job and run — the one
 whose metrics justified selecting this configuration in Task 3 — not the source of the registered
