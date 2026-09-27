@@ -19,6 +19,7 @@ MAX_INSTANCES ?= 2
 
 .PHONY: help setup cloud-check data test portability-audit train image image-push reproduce verify clean teardown \
         train-remote tune tune-remote compare reload-check serve serve-image loadtest deploy smoke \
+        loadtest-auth-grant loadtest-token loadtest-auth-revoke loadtest-rows \
         drift inject-drift pipeline cost swap-check llm-eval llm-gate
 
 help:
@@ -106,11 +107,26 @@ deploy: serve-image ## Push the serving image and deploy to Cloud Run. BILLED â€
 smoke: ## adapter.invoke() against $(ENDPOINT) with 3 known payloads (single, batch, invalid->422)
 	python scripts/smoke_test.py --endpoint-name $(ENDPOINT)
 
-loadtest: ## Load test at three concurrency levels
-	@for vus in 1 10 50; do \
-	  echo "=== $$vus VUs ==="; \
-	  k6 run -e TARGET=$(TARGET) -e VUS=$$vus loadtest/k6.js || true; \
-	done
+loadtest-auth-grant: ## Grant yourself roles/iam.serviceAccountTokenCreator so k6 can mint its own token. Revoke when done!
+	python -c "from src import config; from cloudlayer.factory import get_adapter; \
+	cfg = config.load(); adapter = get_adapter(cfg); \
+	print('granted to:', adapter.grant_token_creator(endpoint='$(ENDPOINT)'))"
+
+loadtest-token: ## Mint one 1-hour identity token for k6 to use as a Bearer header against $(ENDPOINT)
+	python -c "from src import config; from cloudlayer.factory import get_adapter; \
+	cfg = config.load(); adapter = get_adapter(cfg); \
+	print(adapter.mint_loadtest_token('$(ENDPOINT)'))"
+
+loadtest-auth-revoke: ## Revoke loadtest-auth-grant. Part of the Task 3 teardown checklist â€” run every time.
+	python -c "from src import config; from cloudlayer.factory import get_adapter; \
+	cfg = config.load(); adapter = get_adapter(cfg); \
+	print('revoked from:', adapter.revoke_token_creator(endpoint='$(ENDPOINT)'))"
+
+loadtest-rows: ## Export real held-out rows for k6 to sample payloads from
+	python scripts/export_holdout_rows.py --out loadtest/holdout_rows.json
+
+loadtest: loadtest-rows ## Load test at 1/10/50 VUs against $(ENDPOINT). Grants+mints+revokes the token itself.
+	python scripts/run_loadtest.py --endpoint $(ENDPOINT)
 
 # --- Lab 4 -------------------------------------------------------------------
 inject-drift: ## Shift a feature's distribution on purpose

@@ -1,0 +1,10 @@
+{
+  "vus": 10,
+  "instance": "1-512Mi",
+  "source": "Step 1 original run, recorded before this file was overwritten",
+  "p50_ms": 101.87,
+  "p95_ms": 148.43,
+  "p99_ms": 165.12,
+  "error_rate": 0,
+  "n_measure": 5788
+}
