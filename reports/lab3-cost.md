@@ -35,3 +35,21 @@ utilisation, so at 100% it would be 20 times cheaper (about 0.012 THB).
 
 Below about 100 requests per day (~0.0012 req/s), a scheduled batch job is cheaper than keeping this endpoint warm.
 Staying warm costs about 101.5 THB a day regardless of traffic, while one daily batch run costs about 0.14 THB (estimated from the Lab 2 training job, since no batch scoring job was built in this lab).
+
+## Teardown
+
+`make teardown LAB=3` run and confirmed:
+
+- `gcloud run services list --region=asia-southeast1` → 0 items
+- IAM: no `roles/iam.serviceAccountTokenCreator` or `roles/run.invoker` bindings remain,
+  on the training service account or at project level
+- Registered model versions confirmed intact: `itcs355-lab2-sensor-risk`
+  (`437231793901404160@1`, alias `production`) and the canary model
+  (`109031971056779264@1`, alias `staging`)
+- `make portability-audit`: passed
+- `make test`: 37 passed
+- `git status`: no `cloud.env` present
+
+A bug was found and fixed during teardown: `GcpAdapter.teardown()`'s Cloud Run list filter
+used `labels.<key>=<value>`, which silently matches nothing — `gcloud run services list`
+needs `metadata.labels.<key>=<value>` instead. Fixed in `cloudlayer/gcp.py`.
