@@ -166,7 +166,9 @@ file from an actual logging sink instead; building one was out of scope here.
   — manually triggered and confirmed a **second**, scheduler-initiated execution ran
   (not just a direct `jobs execute`), proving the Scheduler → Cloud Run Jobs API path
   itself works, not only the job in isolation.
-- Email notification channel created; verification code sent to confirm the address.
+- Email notification channel created and **verified** (`verificationStatus: VERIFIED`)
+  — Cloud Monitoring sent a plain alphanumeric code by email (not a clickable link),
+  confirmed via `notificationChannels.verify`.
 - Alert policy (`monitoring/alert-policy.json`) — one condition per feature, OR
   combined, each at `ALERT_THRESHOLD`. One condition per feature because the feature
   name is encoded in the metric *type* (`drift.psi.<feature>`), not a label, so a
