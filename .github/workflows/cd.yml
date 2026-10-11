@@ -86,6 +86,17 @@ jobs:
               image_uri=os.environ['IMAGE_URI'], max_instances=2, lab=4,
           )
           print(f'deployed: {name} -> {adapter.service_url(name)}')
+
+          # Task 4's dashboard needs 'model version in production' as a signal. Once
+          # per deploy (not once per request, which would add a network call to the
+          # request path) -- best-effort: a metrics-write failure here must not fail
+          # a deploy that otherwise succeeded.
+          model_name, _, version = os.environ['MODEL_REF'].rpartition('@')
+          try:
+              entry = adapter.describe_model(model_name, version)
+              adapter.emit_metric('model_version', float(entry['version_id']))
+          except Exception as exc:
+              print(f'model_version metric emit failed (non-fatal): {exc}')
           "
 
       - name: Smoke test
