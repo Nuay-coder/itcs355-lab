@@ -306,7 +306,7 @@ class GcpAdapter(CloudAdapter):
     def _service_manifest(
         self, endpoint: str, image_uri: str, cpu: str, memory: str,
         env: dict[str, str], max_instances: int, concurrency: int,
-        revision_suffix: str | None,
+        revision_suffix: str | None, lab: int = 3,
     ) -> dict[str, Any]:
         """Knative Service manifest for `gcloud run services replace`. Declarative and
         create-or-update by construction — the same manifest applied twice just updates
@@ -315,8 +315,13 @@ class GcpAdapter(CloudAdapter):
         gcloud run deploy has no stable flag for startup/liveness probes; they only exist
         on the underlying Knative spec, so this is built by hand rather than shelled out
         to `gcloud run deploy` piece by piece.
+
+        `lab` defaults to 3 to keep Lab 3's `deploy_service.py`/`make deploy` behaviour
+        unchanged. Lab 4's CD workflow deploys a second, staging-only Cloud Run service
+        and passes `lab=4` so `make teardown LAB=4` can find and delete it independently
+        of Lab 3's resources.
         """
-        labels = self.cfg.tags(3)
+        labels = self.cfg.tags(lab)
         template_metadata: dict[str, Any] = {
             "labels": labels,
             "annotations": {
@@ -393,7 +398,7 @@ class GcpAdapter(CloudAdapter):
     def deploy(
         self, model_ref: str, endpoint: str, instance: str, *,
         image_uri: str, max_instances: int = 2, concurrency: int = 80,
-        revision_suffix: str | None = None,
+        revision_suffix: str | None = None, lab: int = 3,
     ) -> str:
         """Deploy the serving image to Cloud Run, wired to one registered model version.
 
@@ -453,6 +458,7 @@ class GcpAdapter(CloudAdapter):
 
         manifest = self._service_manifest(
             endpoint, image_uri, cpu, memory, env, max_instances, concurrency, revision_suffix,
+            lab=lab,
         )
         with tempfile.TemporaryDirectory() as tmp:
             manifest_path = Path(tmp) / "service.yaml"

@@ -1,8 +1,10 @@
 # ITCS355 Lab 4 — continuous deployment.
 #
-# Runs only on main, only after CI is green. Credentials come from OIDC federation, not
-# from stored keys — TODO(Lab 4): uncomment the block for YOUR provider and delete the
-# other two.
+# Runs only on main, only after CI is green. Credentials come from GCP Workload Identity
+# Federation — no long-lived key is stored anywhere. ci.yml's `build` job already pushed
+# the SHA-tagged serving image on this same commit (main-only push step); this workflow
+# only resolves that digest, deploys it to a staging-only Cloud Run service, and smoke
+# tests it. It never touches the production service Lab 3 deployed and tore down.
 
 name: CD
 
@@ -16,6 +18,11 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  STAGING_ENDPOINT: itcs355-predict-staging
+  # Lab 2's registered model, same one Lab 3's production deploy used.
+  MODEL_REF: projects/126202218664/locations/asia-southeast1/models/437231793901404160@production
+
 jobs:
   deploy-staging:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
@@ -23,40 +30,80 @@ jobs:
     environment: staging
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
-      # --- AWS ---------------------------------------------------------------
-      # - uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-      #     aws-region: ${{ vars.REGION }}
-      # - run: aws ecr get-login-password --region ${{ vars.REGION }} | docker login --username AWS --password-stdin ${{ vars.CONTAINER_REGISTRY }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
 
-      # --- Azure -------------------------------------------------------------
-      # - uses: azure/login@v2
-      #   with:
-      #     client-id: ${{ secrets.AZURE_CLIENT_ID }}
-      #     tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-      #     subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      # - run: az acr login --name ${{ vars.ACR_NAME }}
-
-      # --- GCP ---------------------------------------------------------------
-      # - uses: google-github-actions/auth@v2
-      #   with:
-      #     workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-      #     service_account: ${{ secrets.GCP_DEPLOY_SA }}
-      # - run: gcloud auth configure-docker ${{ vars.REGION }}-docker.pkg.dev
-
-      - name: Push image
+      - name: Install
         run: |
-          echo "TODO(Lab 4): push the SHA-tagged image through your adapter"
-          # python -c "from src import config; from cloudlayer.factory import get_adapter; \
-          #   print(get_adapter(config.load()).push_image('itcs355-serve:${{ github.sha }}'))"
+          pip install --upgrade pip
+          pip install --require-hashes -r requirements.txt
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Resolve pushed image digest
+        id: image
+        env:
+          CONTAINER_REGISTRY: ${{ vars.CONTAINER_REGISTRY }}
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          DIGEST=$(gcloud artifacts docker images describe \
+            "${CONTAINER_REGISTRY}/itcs355-serve:${SHA}" \
+            --format="value(image_summary.digest)")
+          IMAGE_URI="${CONTAINER_REGISTRY}/itcs355-serve@${DIGEST}"
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+          echo "resolved: $IMAGE_URI"
 
       - name: Deploy to staging
+        # adapter.deploy(model_ref, endpoint, instance, image_uri=..., lab=4). lab=4
+        # labels this Cloud Run service separately from Lab 3's production service, so
+        # `make teardown LAB=4` can find and delete it without touching Lab 3/5's
+        # resources (cloudlayer/gcp.py:_service_manifest).
+        env:
+          CLOUD_PROVIDER: gcp
+          PROJECT_ID: ${{ vars.PROJECT_ID }}
+          REGION: ${{ vars.REGION }}
+          CONTAINER_REGISTRY: ${{ vars.CONTAINER_REGISTRY }}
+          TRAINING_SERVICE_ACCOUNT: ${{ vars.TRAINING_SERVICE_ACCOUNT }}
+          IMAGE_URI: ${{ steps.image.outputs.image_uri }}
         run: |
-          echo "TODO(Lab 4): adapter.deploy(model_ref, endpoint, instance)"
+          python -c "
+          from src import config
+          from cloudlayer.factory import get_adapter
+          import os
+          adapter = get_adapter(config.load(strict=False))
+          name = adapter.deploy(
+              os.environ['MODEL_REF'], os.environ['STAGING_ENDPOINT'], '1-512Mi',
+              image_uri=os.environ['IMAGE_URI'], max_instances=2, lab=4,
+          )
+          print(f'deployed: {name} -> {adapter.service_url(name)}')
+          "
 
       - name: Smoke test
-        run: |
-          echo "TODO(Lab 4): adapter.invoke() with three known payloads."
-          echo "A deploy that is not smoke-tested is a deploy you have not verified."
+        # Three known payloads (single valid, batch valid, invalid -> 422), asserting
+        # model_version on every successful response. A deploy that is not smoke-tested
+        # is a deploy you have not verified. scripts/smoke_test.py calls config.load()
+        # strict, so all nine capability slots must be present even though this script
+        # only exercises CLOUD_PROVIDER/PROJECT_ID/REGION/TRAINING_SERVICE_ACCOUNT —
+        # none of the rest are secret, they're the same values committed in
+        # cloud.env.example and visible throughout reports/*.md already.
+        env:
+          CLOUD_PROVIDER: gcp
+          PROJECT_ID: ${{ vars.PROJECT_ID }}
+          REGION: ${{ vars.REGION }}
+          BLOB_URI: ${{ vars.BLOB_URI }}
+          CONTAINER_REGISTRY: ${{ vars.CONTAINER_REGISTRY }}
+          MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_TRACKING_URI }}
+          MODEL_REGISTRY_NAME: ${{ vars.MODEL_REGISTRY_NAME }}
+          IDENTITY_REF: ${{ vars.IDENTITY_REF }}
+          TRAINING_SERVICE_ACCOUNT: ${{ vars.TRAINING_SERVICE_ACCOUNT }}
+        run: python scripts/smoke_test.py --endpoint-name "${{ env.STAGING_ENDPOINT }}"

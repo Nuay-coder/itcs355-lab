@@ -20,7 +20,15 @@ from sklearn.ensemble import RandomForestClassifier
 from src import config, data, seeds
 
 RAW = config.REPO_ROOT / "data" / "raw" / "sensors.csv"
-LATENCY_BUDGET_MS = 50.0  # TODO(Lab 4): set from YOUR p95 target in loadtest/k6.js
+
+# loadtest/k6.js:64 sets the end-to-end target at p95 < 200ms for the full HTTP round
+# trip (FastAPI routing, pydantic validation, JSON encode/decode, network). This test
+# measures only the in-process RandomForestClassifier.predict_proba call, which is one
+# component inside that 200ms, not the whole budget — so the number here must be a
+# fraction of it, not equal to it. 25% (50ms) leaves the other 150ms for everything the
+# service layer adds, which service/app.py's timing fields (parse/predict/serialize)
+# consistently show taking single-digit milliseconds in practice.
+LATENCY_BUDGET_MS = 50.0
 
 
 @pytest.fixture(scope="module")
