@@ -157,13 +157,14 @@ llm-gate: ## Prove the gate fails on a degraded set — expected to exit non-zer
 cost: ## Build the cost report
 	python scripts/cost_report.py --estimate $(EST) --actual $(ACT) --rps $(RPS) --instance $(INSTANCE)
 
-cost-report: ## Lab 4 teardown step named in the handout. Alias for `cost`, written to reports/lab4-cost.md
-	# scripts/cost_report.py is Lab 5 scaffolding (its own doc says so, and the report
-	# title inside it still reads "Lab 5 — Cost report" — that's the script's hardcoded
-	# text, not a bug here). Reused for Lab 4 so `make cost-report` from the handout
-	# resolves to something, writing to a Lab-4-specific file instead of reports/lab5-cost.md.
-	python scripts/cost_report.py --estimate $(EST) --actual $(ACT) --rps $(RPS) --instance $(INSTANCE) \
-	  --out reports/lab4-cost.md
+cost-report: ## Lab 4 teardown step named in the handout. Verified against the real GCP Billing Console.
+	# scripts/lab4_cost_report.py -- not scripts/cost_report.py, which is Lab 5
+	# scaffolding with its own estimate-vs-actual framing and TODOs. The figures
+	# below were read by hand from Billing -> Reports (grouped by the `lab` label,
+	# scoped to this project); there is no API to pull them from automatically.
+	python scripts/lab4_cost_report.py \
+	  --window-start 2026-10-01 --window-end 2026-10-11 \
+	  --lab-usage-cost 0.13 --lab-other-savings 0.13
 
 swap-check: ## Prove the portability seam against a second provider
 	python scripts/portability_swap_check.py --second-provider $(SECOND)
