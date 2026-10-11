@@ -16,7 +16,7 @@
 **Cost breakdown**
 
 Trial-by-trial cost, the full comparison table, and the model-selection justification are
-in [`reports/lab2-comparison.md`](reports/lab2-comparison.md).
+in [`reports/lab2-comparison.md`](../../reports/lab2-comparison.md).
 
 ---
 
@@ -56,7 +56,7 @@ custom-uploaded model and had to be moved to `version_description` as JSON inste
 | `metric_test` | `0.8532857870606215` |
 
 The model-selection justification (why this run and not the sweep's raw highest-scoring one) is in
-[`reports/lab2-comparison.md`](reports/lab2-comparison.md).
+[`reports/lab2-comparison.md`](../../reports/lab2-comparison.md).
 
 Promoted through a staging step via `GcpAdapter.promote_model()`: registered with alias `staging`,
 then moved to `production` (Vertex's `MergeVersionAliases`, adding `production` and dropping

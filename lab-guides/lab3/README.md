@@ -17,10 +17,10 @@
 
 What each report in `reports/` covers:
 
-- [`reports/lab3-load.md`](reports/lab3-load.md) — load test results and the latency target.
-- [`reports/lab3-canary.md`](reports/lab3-canary.md) — canary detection design and outcome.
-- [`reports/lab3-canary-evidence.md`](reports/lab3-canary-evidence.md) — timestamped rollback evidence.
-- [`reports/lab3-cost.md`](reports/lab3-cost.md) — cost per 1,000 predictions and the batch-vs-warm breakeven.
+- [`reports/lab3-load.md`](../../reports/lab3-load.md) — load test results and the latency target.
+- [`reports/lab3-canary.md`](../../reports/lab3-canary.md) — canary detection design and outcome.
+- [`reports/lab3-canary-evidence.md`](../../reports/lab3-canary-evidence.md) — timestamped rollback evidence.
+- [`reports/lab3-cost.md`](../../reports/lab3-cost.md) — cost per 1,000 predictions and the batch-vs-warm breakeven.
 
 ---
 
