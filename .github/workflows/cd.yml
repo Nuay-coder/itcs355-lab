@@ -88,6 +88,14 @@ jobs:
           print(f'deployed: {name} -> {adapter.service_url(name)}')
           "
 
+      - name: DEBUG token diagnostics
+        run: |
+          echo "== current account =="
+          gcloud config get-value account
+          echo "== tier2: no impersonation =="
+          gcloud auth print-identity-token --audiences=https://itcs355-predict-staging-gpitnozf7q-as.a.run.app || true
+          echo "== tier2 exit: $? =="
+
       - name: Smoke test
         # Three known payloads (single valid, batch valid, invalid -> 422), asserting
         # model_version on every successful response. A deploy that is not smoke-tested
