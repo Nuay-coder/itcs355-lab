@@ -96,6 +96,18 @@ jobs:
         # only exercises CLOUD_PROVIDER/PROJECT_ID/REGION/TRAINING_SERVICE_ACCOUNT —
         # none of the rest are secret, they're the same values committed in
         # cloud.env.example and visible throughout reports/*.md already.
+        #
+        # TRAINING_SERVICE_ACCOUNT here is deliberately the DEPLOY SA, not the real
+        # runtime SA used in the Deploy step above. adapter.invoke()'s auth fallback
+        # chain tries, in order: ADC fetch_id_token (fails under WIF+impersonation --
+        # google-auth's fetch_id_token doesn't support external_account credentials);
+        # `gcloud auth print-identity-token` with no explicit impersonation (confirmed
+        # live to be flaky under the exact same WIF+impersonation setup -- it succeeded
+        # once, then failed identically on the very next run with no config change);
+        # then `--impersonate-service-account=$TRAINING_SERVICE_ACCOUNT`. Pointing that
+        # last, reliable tier at the deploy SA itself works because it already holds
+        # serviceAccountTokenCreator on itself (granted for exactly this), making it a
+        # same-identity self-impersonation call instead of the flaky WIF-chained one.
         env:
           CLOUD_PROVIDER: gcp
           PROJECT_ID: ${{ vars.PROJECT_ID }}
@@ -105,5 +117,5 @@ jobs:
           MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_TRACKING_URI }}
           MODEL_REGISTRY_NAME: ${{ vars.MODEL_REGISTRY_NAME }}
           IDENTITY_REF: ${{ vars.IDENTITY_REF }}
-          TRAINING_SERVICE_ACCOUNT: ${{ vars.TRAINING_SERVICE_ACCOUNT }}
+          TRAINING_SERVICE_ACCOUNT: ${{ secrets.GCP_DEPLOY_SA }}
         run: python scripts/smoke_test.py --endpoint-name "${{ env.STAGING_ENDPOINT }}"
