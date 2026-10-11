@@ -15,38 +15,56 @@ dashboard), sized generously because most of these resource types were new to th
 project and I didn't have a precise per-unit cost in mind yet.
 
 ## 2. Actual, from billing filtered by tag
-0.50 THB — **an engineering estimate, not a billing-console figure.** This project's
-billing account has no BigQuery cost export configured (confirmed: `bq ls` returns
-nothing) and GCP's own billing data has a processing lag of several hours to a day,
-so no verified number exists yet for today's activity. The estimate is built from
-what I measured directly: ~5 Cloud Run Job executions at ~30s each
-(≈0.04h × 4.23 THB/h ≈ 0.18 THB), a handful of staging-service smoke-test requests
-(seconds of active compute, <0.05 THB), and Cloud Scheduler/Monitoring/dashboard
-usage that stayed inside each service's free tier (Scheduler: 3 free jobs/month;
-Monitoring: custom-metric ingestion far under the free allotment for ~15 data
-points) — call it 0 THB for those. Rounded up for margin: 0.5 THB.
+**0.00 THB — verified in the real Billing Console, not an estimate.**
+
+I initially wrote this section as an engineering estimate (~0.5 THB), because
+`gcloud billing` has no subcommand for querying historical spend (confirmed: its only
+groups are `accounts`, `budgets`, `projects`) and no BigQuery cost export is
+configured for this account (`bq ls` returns nothing) — the invoice-based Cost table
+also only has closed months (latest: September 2026), not October. That's a real
+limitation, but it isn't the end of the road: Billing → Reports shows near-real-time
+spend, which neither of those gaps blocks. Filtered to this project (`itcs355-6688033`,
+1 of the account's 2 projects) for Oct 1–11, 2026 — the entire window Lab 4 has
+existed in, since Labs 1–3's resources were created and torn down in September:
+
+| Service | Usage cost | Other savings | Subtotal |
+|---|---|---|---|
+| Artifact Registry | ฿0.00 | ฿0.00 | ฿0.00 |
+| Cloud Storage | ฿0.00 | ฿0.00 | ฿0.00 |
+| Cloud Logging | ฿0.00 | ฿0.00 | ฿0.00 |
+| Cloud Run | **฿0.13** | **-฿0.13** | ฿0.00 |
+| **Filtered total** | | | **฿0.00** |
+
+Cloud Run genuinely incurred ฿0.13 in usage charges (the scale-to-zero staging
+service + the drift Cloud Run Job's executions) — it did not simply round to zero —
+but free-trial credit fully offset it. Screenshot:
+![Billing Console, Oct 1-11, project-filtered, grouped by service](../lab-guides/lab4/evidence/billing-console-cost-breakdown.jpg)
+
+One gap left open: I filtered by *project*, not by the `lab=4` resource label
+specifically (the Reports UI does expose a Labels filter; I didn't apply it,
+since no other lab's resources existed in this window to need separating out from).
+If Lab 5 runs inside the same Oct window, that label filter — not just the project
+filter — becomes the one to use.
 
 ## 3. The gap
--9.50 THB (-95.0%)
-
-The estimate was a precaution against unknowns in resources I'd never provisioned
-before (Cloud Run Jobs, Scheduler, alerting), not a calculation — the actual spend
-stayed low because every Lab 4 resource either ran for seconds (the drift job,
-scale-to-zero staging requests) or stayed inside a free tier (Scheduler, Monitoring,
-dashboards, notification channels). Nothing here ran continuously or was left idle
-and billed; the whole stack was torn down (`make teardown LAB=4`) within hours of
-creation.
++9.50 THB vs. my original engineering estimate (10.00 THB estimate, 0.50 THB
+estimated-actual) before I checked the real Console — i.e. no gap at all once I
+checked. Writing "no billing export exists, so I'll estimate" and stopping there
+was the mistake, not the estimate's size: `reports/lab2-comparison.md` set the
+precedent for this (checking three independent sources when the primary one wasn't
+reachable), and the equivalent move here was checking the Reports UI instead of
+treating "no BigQuery export" as "no way to check."
 
 ## 4. Breakdown by component
-| Component | THB (est.) | Notes |
+| Component | THB | Notes |
 |---|---|---|
-| Serving (staging Cloud Run) | ~0.05 | Scale-to-zero; billed only for the few seconds of actual smoke-test request handling across ~6 CD runs. |
-| Scheduled drift job (Cloud Run Job) | ~0.18 | ~5 executions × ~30s, `1-512Mi`-equivalent default resources. |
-| Scheduler / Monitoring / dashboard / notification channel | 0 | Inside each service's free tier for this volume. |
-| Storage (GCS: reference/current CSVs) | ~0.01 | A few hundred KB, hours of storage. |
+| Cloud Run (staging service + drift Job, combined) | 0.13 usage, -0.13 savings → 0.00 net | Console doesn't split Cloud Run service vs. Cloud Run Jobs sub-costs in this view. |
+| Artifact Registry | 0.00 | Image storage for the training/serving images pushed during Lab 4. |
+| Cloud Storage | 0.00 | `lab4/reference.csv` + `lab4/current.csv`, a few hundred KB. |
+| Cloud Logging | 0.00 | Job/service logs. |
+| Cloud Scheduler, Monitoring (metrics/alerts/dashboard) | not separately billed | Don't appear as billed line items at this volume — inside each service's free tier. |
 
-No real billing-console breakdown by tag was available (see §2) — this table is
-built the same way the "actual" figure above was.
+Source: the same Billing Console query as §2, grouped by service.
 
 ## 5. Cost per 1,000 predictions
 Measured throughput: 96.5 req/s — reused from `reports/lab3-load.md` (same instance
