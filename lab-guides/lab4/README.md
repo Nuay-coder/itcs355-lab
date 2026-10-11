@@ -87,8 +87,20 @@ runs after the fixes below.
 
 ---
 
+## Task 3 — Prove a bad commit is blocked
+
+[PR #7](https://github.com/Nuay-coder/itcs355-lab/pull/7) deliberately generated
+`temp_c` in Fahrenheit (every value stays numeric and type-correct, so only the
+range check catches it). CI's `test` job failed in 70s on
+`tests/test_data.py::test_features_within_plausible_ranges`
+(`temp_c above plausible ceiling: 240.215`), and the `build` job — the expensive
+step that builds two Docker images — never ran at all, skipped because it `needs:
+test`. PR closed without merging; full evidence in
+[`reports/lab4-ci-evidence.md`](../../reports/lab4-ci-evidence.md).
+
+---
+
 ## Reports
 
-Task 3's failing-PR evidence (`reports/lab4-ci-evidence.md`) is not written yet — a
-link here would be broken (the repo's `links` check already caught this once). Linked
-once that report exists.
+- [`reports/lab4-ci-evidence.md`](../../reports/lab4-ci-evidence.md) — Task 3's
+  failing-PR evidence: the exact assertion, timing, and why the build job never ran.
