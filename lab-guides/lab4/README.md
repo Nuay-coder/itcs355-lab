@@ -34,14 +34,14 @@ I reused the existing Lab 1–3 code and dataset; nothing here trains a new mode
 **What the data contract tests would catch** (examples, not production incidents —
 this project has never served real traffic):
 
-| Data contract | Problem it would catch |
+| Test | Problem it would catch |
 |---|---|
-| Columns and types | Upstream renames `load_pct`, or a dtype silently changes. |
-| No nulls in required columns | A sensor drops out, leaving missing values. |
-| Plausible ranges | `temp_c` reported in Fahrenheit, or an impossible `load_pct = 250`. |
-| Labels 0/1, positive rate 1–99% | Every row relabelled `0`, or failures miscoded. |
-| Unique `reading_id` | An ingestion retry double-writes a batch. |
-| No machine leaks across splits | `split()` refactored to split by row instead of machine. |
+| `test_schema_columns_present_and_typed` | Upstream renames `load_pct`, or a dtype silently changes. |
+| `test_no_nulls_in_required_columns` | A sensor drops out, leaving missing values. |
+| `test_features_within_plausible_ranges` | `temp_c` reported in Fahrenheit, or an impossible `load_pct = 250`. |
+| `test_target_is_binary_and_not_degenerate` | Every row relabelled `0`, or failures miscoded. |
+| `test_identifier_is_unique` | An ingestion retry double-writes a batch. |
+| `test_no_machine_leaks_across_splits` | `split()` refactored to split by row instead of machine. |
 
 I validated this against 9 deliberately corrupted copies of the dataframe — **9/9
 rejected**.
