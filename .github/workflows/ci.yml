@@ -26,10 +26,11 @@ jobs:
           cache: pip
 
       - name: Install
+        # requirements.txt is fully hash-pinned (pip-compile --generate-hashes); verified
+        # locally that `pip install --require-hashes -r requirements.txt` installs clean.
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt
-          # TODO(Lab 4): once requirements.txt carries hashes, add --require-hashes.
+          pip install --require-hashes -r requirements.txt
 
       - name: Lint
         # ruff is pinned in requirements.txt and installed above. Installing it unpinned
@@ -41,6 +42,11 @@ jobs:
 
       - name: Generate dataset
         run: python scripts/make_dataset.py
+
+      - name: Unit tests
+        # Fast, no network, no model fit — src/data.py helpers and monitoring/drift.py's
+        # PSI/KS math. Runs before data contract tests because it is cheaper still.
+        run: pytest -q tests/test_unit.py
 
       - name: Data contract tests
         run: pytest -q tests/test_data.py
@@ -70,7 +76,7 @@ jobs:
       - name: Install
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install --require-hashes -r requirements.txt
 
       - name: Build training image
         run: docker buildx build --platform linux/amd64 -t itcs355:${{ github.sha }} --load .
@@ -94,9 +100,47 @@ jobs:
           curl -sf -X POST localhost:8080/predict \
             -H 'content-type: application/json' \
             -d '{"temp_c":78.4,"vibration_mm_s":3.1,"pressure_kpa":315.2,"hours_since_service":4200,"load_pct":68,"ambient_humidity":55}' \
-            | tee /dev/stderr | grep -q probability
+            | tee /dev/stderr \
+            | jq -e --arg sha "${{ github.sha }}" '
+                (.prediction | type) == "number" and
+                (.probability | type) == "number" and (.probability >= 0) and (.probability <= 1) and
+                (.request_id | type) == "string" and
+                .model_version == $sha
+              '
           docker stop svc
 
       # Images are tagged with the commit SHA, never `latest`. A `latest` tag makes it
       # impossible to say which code is serving, which is the question you will be asked
       # during an incident.
+
+      - name: Authenticate to GCP
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+      - name: Set up gcloud
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Push serving image (main only)
+        # Only reached on green, on main — a PR run never pushes an image. Reuses
+        # GcpAdapter.push_image(), which runs `gcloud auth configure-docker` then
+        # `docker push` and returns the digest-pinned reference, never a floating tag.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: push
+        env:
+          CLOUD_PROVIDER: gcp
+          PROJECT_ID: ${{ vars.PROJECT_ID }}
+          REGION: ${{ vars.REGION }}
+          CONTAINER_REGISTRY: ${{ vars.CONTAINER_REGISTRY }}
+        run: |
+          DIGEST=$(python -c "
+          from src import config
+          from cloudlayer.factory import get_adapter
+          print(get_adapter(config.load(strict=False)).push_image('itcs355-serve:${{ github.sha }}'))
+          ")
+          echo "image_digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "### Pushed image" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"

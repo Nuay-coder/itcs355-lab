@@ -17,10 +17,10 @@ ENDPOINT ?= itcs355-predict
 INSTANCE ?= 1-512Mi
 MAX_INSTANCES ?= 2
 
-.PHONY: help setup cloud-check data test portability-audit train image image-push reproduce verify clean teardown \
+.PHONY: help setup cloud-check data test test-unit portability-audit train image image-push reproduce verify clean teardown \
         train-remote tune tune-remote compare reload-check serve serve-image loadtest deploy smoke \
         loadtest-auth-grant loadtest-token loadtest-auth-revoke loadtest-rows \
-        drift inject-drift pipeline cost swap-check llm-eval llm-gate
+        drift drift-emit inject-drift pipeline cost cost-report swap-check llm-eval llm-gate
 
 help:
 	@grep -E "^[a-zA-Z_-]+:.*?## .*$$" $(MAKEFILE_LIST) | awk -F":.*?## " "{printf \"  %-20s %s\\n\", \$$1, \$$2}"
@@ -38,6 +38,9 @@ data: ## Generate the default dataset (deterministic)
 
 test: ## Run data contract and split property tests
 	pytest -q tests/
+
+test-unit: ## Lab 4 — run only the fast, no-network unit tests
+	pytest -q tests/test_unit.py
 
 portability-audit: ## Fail if provider strings leak into src/
 	python scripts/portability_audit.py
@@ -62,7 +65,7 @@ reproduce: data image ## THE ONE COMMAND. Grader runs this.
 verify: ## Check the produced metric against the README claim
 	python scripts/verify_metric.py
 
-teardown: ## Delete every resource tagged course=itcs355 for this lab. LAB=3 for Cloud Run.
+teardown: ## Delete every resource tagged course=itcs355 for this lab. LAB=3 for Cloud Run, LAB=4 also covers Cloud Scheduler/alerting.
 	python -c "from src import config; from cloudlayer.factory import get_adapter; \
 	cfg=config.load(); print(get_adapter(cfg).teardown(cfg.tags($(LAB))))"
 
@@ -135,6 +138,9 @@ inject-drift: ## Shift a feature's distribution on purpose
 drift: ## Score drift against the reference window
 	python -m monitoring.drift --current data/current.csv
 
+drift-emit: ## Score drift AND push the PSI scores to Cloud Monitoring (adapter.emit_metric)
+	python -m monitoring.drift --current data/current.csv --emit
+
 # --- Lab 5 -------------------------------------------------------------------
 pipeline: ## Compile pipeline/pipeline.yaml for your provider
 	python -c "from cloudlayer.pipelines import compile_for; from src import config; \
@@ -150,6 +156,14 @@ llm-gate: ## Prove the gate fails on a degraded set — expected to exit non-zer
 
 cost: ## Build the cost report
 	python scripts/cost_report.py --estimate $(EST) --actual $(ACT) --rps $(RPS) --instance $(INSTANCE)
+
+cost-report: ## Lab 4 teardown step named in the handout. Alias for `cost`, written to reports/lab4-cost.md
+	# scripts/cost_report.py is Lab 5 scaffolding (its own doc says so, and the report
+	# title inside it still reads "Lab 5 — Cost report" — that's the script's hardcoded
+	# text, not a bug here). Reused for Lab 4 so `make cost-report` from the handout
+	# resolves to something, writing to a Lab-4-specific file instead of reports/lab5-cost.md.
+	python scripts/cost_report.py --estimate $(EST) --actual $(ACT) --rps $(RPS) --instance $(INSTANCE) \
+	  --out reports/lab4-cost.md
 
 swap-check: ## Prove the portability seam against a second provider
 	python scripts/portability_swap_check.py --second-provider $(SECOND)

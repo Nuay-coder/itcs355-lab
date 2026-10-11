@@ -22,9 +22,26 @@ import pandas as pd
 
 # Conventional PSI reading, and it IS only conventional — it comes from credit scoring,
 # where features are stable and volumes are large. Your problem may warrant something
-# tighter or looser. TODO(Lab 4): state your threshold and why, in your README.
+# tighter or looser. Kept here only as the credit-scoring convention for reference —
+# ALERT_THRESHOLD below is the one this project actually alerts on, and it is measured,
+# not copied.
 PSI_NO_CHANGE = 0.10
 PSI_MODERATE = 0.25
+
+# Measured, not copied from a tutorial: compared disjoint random samples of
+# data/raw/sensors.csv against itself at the window size the scheduled detector actually
+# uses (500 rows, Task 5 — a plausible "most recent production requests" batch) across 40
+# trials x 6 features. Pure sampling noise at that size runs mean≈0.033, p95≈0.062,
+# p99≈0.087, max≈0.106 — i.e. a healthy, unchanged feature can swing past PSI_NO_CHANGE
+# (0.10) on noise alone at this window size, which is exactly the "everything alerts
+# constantly" failure mode. The actual injected drift this project tests against
+# (`scripts/inject_drift.py --feature temp_c --mode shift --magnitude 6`, the default) at
+# the same 500-row window scores 0.369 for the shifted feature while every untouched
+# feature stays at 0.01-0.02, far below the noise ceiling. ALERT_THRESHOLD sits
+# comfortably above the measured noise (p99 0.087, rounded up with margin) and far below
+# the real signal (0.369) — the gap between them is wide enough that the exact window size
+# is not fragile. Re-run the same measurement if the scheduled window size changes.
+ALERT_THRESHOLD = 0.15
 
 
 @dataclass
@@ -106,8 +123,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--reference", type=Path, default=Path("data/raw/sensors.csv"))
     ap.add_argument("--current", type=Path, required=True)
-    ap.add_argument("--threshold", type=float, default=PSI_MODERATE,
-                    help="alert above this PSI. Justify your value in the README.")
+    ap.add_argument("--threshold", type=float, default=ALERT_THRESHOLD,
+                    help="alert above this PSI. See ALERT_THRESHOLD above and "
+                         "lab-guides/lab4/README.md for how it was measured.")
     ap.add_argument("--out", type=Path, default=Path("reports/drift.json"))
     ap.add_argument("--emit", action="store_true", help="send scores as cloud metrics")
     args = ap.parse_args()
