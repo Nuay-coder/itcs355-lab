@@ -139,6 +139,48 @@ known-good, or trigger retraining) rather than staying silent.
 
 ---
 
+## Task 5 — Scheduled drift detection
+
+**Threshold** (`monitoring/drift.py`, `ALERT_THRESHOLD = 0.15`) — measured, not copied:
+compared disjoint random samples of the training data against itself at the 500-row
+window size the scheduled job actually uses (40 trials × 6 features). Pure sampling
+noise there runs p99≈0.087 — above the credit-scoring convention `PSI_NO_CHANGE=0.10`,
+which is exactly the "everything alerts constantly" failure mode the handout warns
+about. The actual injected drift this project tests against (`scripts/inject_drift.py`
+default) scores 0.369 at the same window size. 0.15 sits comfortably above the noise
+and far below the real signal.
+
+**Stated gap**: this project has never served real traffic
+(`reports/lab3-cost.md`) and `service/app.py` has no logging sink that persists
+recent request features anywhere queryable. "Recent production inputs" is simulated
+as whatever file sits at `gs://<bucket>/lab4/current.csv` — Task 6 uploads a
+deliberately shifted version of it. A system with real traffic would populate that
+file from an actual logging sink instead; building one was out of scope here.
+
+**Infrastructure, verified live:**
+- Training image now includes `monitoring/`; a Cloud Run Job (`itcs355-lab4-drift`)
+  reuses it with its `ENTRYPOINT`/`CMD` overridden to run
+  `scripts/run_scheduled_drift.py`. `gcloud run jobs execute` completed; its logs show
+  the drift table and `OK  no feature above threshold 0.15`.
+- Cloud Scheduler job (hourly, HTTP target at the Cloud Run Jobs REST `:run` endpoint)
+  — manually triggered and confirmed a **second**, scheduler-initiated execution ran
+  (not just a direct `jobs execute`), proving the Scheduler → Cloud Run Jobs API path
+  itself works, not only the job in isolation.
+- Email notification channel created; verification code sent to confirm the address.
+- Alert policy (`monitoring/alert-policy.json`) — one condition per feature, OR
+  combined, each at `ALERT_THRESHOLD`. One condition per feature because the feature
+  name is encoded in the metric *type* (`drift.psi.<feature>`), not a label, so a
+  single wildcard condition isn't possible — confirmed live:
+  `monitoring.regex.full_match` is rejected on `metric.type` in alert-policy filters.
+- `teardown()` extended for all of this: Cloud Run jobs (label-filtered, same as
+  services); Cloud Scheduler jobs, alert policies, and notification channels
+  (name/displayName-convention matched, since none of those three support labels in
+  this API — confirmed live that a Scheduler job created here comes back with
+  `labels: null`). All four new filters confirmed to match the real resources created
+  above; not yet executed, since Task 6 still needs them alive.
+
+---
+
 ## Reports
 
 - [`reports/lab4-ci-evidence.md`](../../reports/lab4-ci-evidence.md) — Task 3's
