@@ -1,0 +1,156 @@
+{
+  "displayName": "ITCS355 — Prediction service",
+  "mosaicLayout": {
+    "columns": 12,
+    "tiles": [
+      {
+        "width": 12, "height": 2, "xPos": 0, "yPos": 0,
+        "widget": {
+          "title": "Notes",
+          "text": {
+            "format": "MARKDOWN",
+            "content": "**Error rate**: split by `response_code_class` — 4xx is usually a caller problem, 5xx is yours; never sum them into one number. **Latency**: if p99 sits far above p95 in a repeating pattern, suspect cold start or a per-request model load. **Drift**: shown for `temp_c` as the representative feature; the same metric exists per-feature as `custom.googleapis.com/itcs355/drift.psi.<feature>` for all six features in `src/data.FEATURES`, and the red threshold line is `ALERT_THRESHOLD` from `monitoring/drift.py`. **Model version**: written once per deploy (`cd.yml`'s Deploy step), not once per request — during a canary two distinct values in the same window is expected; outside a canary it means something is wrong."
+          }
+        }
+      },
+      {
+        "width": 6, "height": 4, "xPos": 0, "yPos": 2,
+        "widget": {
+          "title": "Request rate",
+          "xyChart": {
+            "dataSets": [{
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"run.googleapis.com/request_count\" resource.type=\"cloud_run_revision\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_RATE",
+                    "crossSeriesReducer": "REDUCE_SUM"
+                  }
+                }
+              },
+              "plotType": "LINE"
+            }],
+            "yAxis": {"label": "req/s", "scale": "LINEAR"}
+          }
+        }
+      },
+      {
+        "width": 6, "height": 4, "xPos": 6, "yPos": 2,
+        "widget": {
+          "title": "Error rate by class (4xx / 5xx)",
+          "xyChart": {
+            "dataSets": [{
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"run.googleapis.com/request_count\" resource.type=\"cloud_run_revision\" metric.label.\"response_code_class\"=one_of(\"4xx\",\"5xx\")",
+                  "aggregation": {
+                    "alignmentPeriod": "300s",
+                    "perSeriesAligner": "ALIGN_RATE",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "groupByFields": ["metric.label.\"response_code_class\""]
+                  }
+                }
+              },
+              "plotType": "LINE"
+            }],
+            "yAxis": {"label": "req/s", "scale": "LINEAR"}
+          }
+        }
+      },
+      {
+        "width": 6, "height": 4, "xPos": 0, "yPos": 6,
+        "widget": {
+          "title": "Latency p50 / p95 / p99",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"run.googleapis.com/request_latencies\" resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_PERCENTILE_50",
+                      "crossSeriesReducer": "REDUCE_MEAN"
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "legendTemplate": "p50"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"run.googleapis.com/request_latencies\" resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_PERCENTILE_95",
+                      "crossSeriesReducer": "REDUCE_MEAN"
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "legendTemplate": "p95"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"run.googleapis.com/request_latencies\" resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_PERCENTILE_99",
+                      "crossSeriesReducer": "REDUCE_MEAN"
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "legendTemplate": "p99"
+              }
+            ],
+            "yAxis": {"label": "ms", "scale": "LINEAR"}
+          }
+        }
+      },
+      {
+        "width": 6, "height": 4, "xPos": 6, "yPos": 6,
+        "widget": {
+          "title": "Feature drift — temp_c PSI (rolling)",
+          "xyChart": {
+            "dataSets": [{
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"custom.googleapis.com/itcs355/drift.psi.temp_c\" resource.type=\"global\"",
+                  "aggregation": {
+                    "alignmentPeriod": "3600s",
+                    "perSeriesAligner": "ALIGN_MEAN"
+                  }
+                }
+              },
+              "plotType": "LINE"
+            }],
+            "thresholds": [{"value": 0.15}],
+            "yAxis": {"label": "PSI", "scale": "LINEAR"}
+          }
+        }
+      },
+      {
+        "width": 6, "height": 4, "xPos": 0, "yPos": 10,
+        "widget": {
+          "title": "Model version in production",
+          "scorecard": {
+            "timeSeriesQuery": {
+              "timeSeriesFilter": {
+                "filter": "metric.type=\"custom.googleapis.com/itcs355/model_version\" resource.type=\"global\"",
+                "aggregation": {
+                  "alignmentPeriod": "3600s",
+                  "perSeriesAligner": "ALIGN_NEXT_OLDER"
+                }
+              }
+            },
+            "sparkChartView": {"sparkChartType": "SPARK_LINE"}
+          }
+        }
+      }
+    ]
+  }
+}
