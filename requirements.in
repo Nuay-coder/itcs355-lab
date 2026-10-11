@@ -13,3 +13,9 @@ ruff==0.16.6
 fastapi==0.141.1
 httpx2==2.12.0
 dvc[gs]==3.67.1
+# cloudlayer/gcp.py's describe_model/register_model/promote_model/submit_training (Lab 2/3)
+# import google.cloud.aiplatform_v1, but nothing locked this dependency before Lab 4's CD
+# actually exercised a clean install — it only worked locally because the dev machine
+# already had it installed outside requirements.txt. Pinned to the version already
+# verified locally.
+google-cloud-aiplatform==2.1.3
