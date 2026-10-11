@@ -40,6 +40,10 @@ RUN chown runner:runner /app
 COPY --chown=runner:runner src/ ./src/
 COPY --chown=runner:runner cloudlayer/ ./cloudlayer/
 COPY --chown=runner:runner scripts/ ./scripts/
+# Lab 4's scheduled drift detector (Cloud Run Job) overrides this image's own
+# ENTRYPOINT/CMD at job-creation time to run scripts/run_scheduled_drift.py instead of
+# training -- same image, same pinned deps, no second Dockerfile to keep in sync.
+COPY --chown=runner:runner monitoring/ ./monitoring/
 # Pointer + remote config only — never the data itself, and never .dvc/cache.
 # entrypoint.sh uses these to `dvc pull` the real bytes at container start, on the one
 # path (managed training) that has no local data and no bind mount to read it from.

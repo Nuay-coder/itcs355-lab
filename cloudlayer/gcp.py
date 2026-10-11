@@ -692,12 +692,15 @@ class GcpAdapter(CloudAdapter):
         return splits
 
     def teardown(self, tags: dict[str, str]) -> list[str]:
-        """Delete every Cloud Run service carrying these labels.
+        """Delete every Cloud Run service, Cloud Run job, Cloud Scheduler job, alert
+        policy, and notification channel carrying these labels (or, for the three
+        resource types below that have no label support at all, matching the
+        `itcs355-lab<N>` naming/display-name convention every Lab 4 resource here was
+        created with).
 
-        Scoped to Cloud Run only — the resource type Lab 3 can actually create with this
-        adapter so far. Lab 5 widens this to cover whatever else it introduces (LLM
-        endpoints, pipelines); nothing here needs to change for that, only more branches
-        added alongside it.
+        Scoped to Cloud Run (services) only when this was first written — Lab 4 widens
+        it to the scheduled-drift resources it introduces; nothing above needs to
+        change for that, only more branches added alongside it.
 
         Filter key is `metadata.labels.<key>`, not bare `labels.<key>` — confirmed live
         that the bare form matches nothing on `gcloud run services list` (silently: exit
@@ -723,6 +726,82 @@ class GcpAdapter(CloudAdapter):
                 check=True,
             )
             deleted.append(f"cloud-run:{name}")
+
+        # --- Cloud Run jobs (Task 5's scheduled drift detector) -----------------
+        # Same metadata.labels.<key> filter as services above; Cloud Run jobs support
+        # labels the same way.
+        job_listing = subprocess.run(
+            ["gcloud", "run", "jobs", "list", "--region", self.cfg.region,
+             "--filter", filter_expr, "--format", "value(metadata.name)"],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        job_names = [line.strip() for line in job_listing.stdout.splitlines() if line.strip()]
+        for name in job_names:
+            subprocess.run(
+                ["gcloud", "run", "jobs", "delete", name,
+                 "--region", self.cfg.region, "--quiet"],
+                check=True,
+            )
+            deleted.append(f"cloud-run-job:{name}")
+
+        # --- Cloud Scheduler, alert policies, notification channels -------------
+        # None of these three support arbitrary labels in this API (confirmed live —
+        # `gcloud scheduler jobs describe` on a job created here comes back with
+        # `labels: null`), so cfg.tags()'s filter approach above cannot apply. Every
+        # Lab 4 resource of these kinds was created following the same
+        # `itcs355-lab<N>` naming/display-name convention instead; match on that.
+        lab = tags.get("lab")
+        name_fragment = f"itcs355-lab{lab}" if lab else "itcs355-lab"
+
+        scheduler_listing = subprocess.run(
+            ["gcloud", "scheduler", "jobs", "list", "--location", self.cfg.region,
+             "--filter", f"name:{name_fragment}", "--format", "value(name)"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        for line in scheduler_listing.stdout.splitlines():
+            name = line.strip()
+            if not name:
+                continue
+            subprocess.run(
+                ["gcloud", "scheduler", "jobs", "delete", name,
+                 "--location", self.cfg.region, "--quiet"],
+                check=True,
+            )
+            deleted.append(f"scheduler:{name}")
+
+        policy_listing = subprocess.run(
+            ["gcloud", "alpha", "monitoring", "policies", "list",
+             "--filter", f'displayName:"Lab {lab}"' if lab else "displayName:Lab",
+             "--format", "value(name)"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        for line in policy_listing.stdout.splitlines():
+            name = line.strip()
+            if not name:
+                continue
+            subprocess.run(
+                ["gcloud", "alpha", "monitoring", "policies", "delete", name, "--quiet"],
+                check=True,
+            )
+            deleted.append(f"alert-policy:{name}")
+
+        channel_listing = subprocess.run(
+            ["gcloud", "beta", "monitoring", "channels", "list",
+             "--filter", f'displayName:"Lab {lab}"' if lab else "displayName:Lab",
+             "--format", "value(name)"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        for line in channel_listing.stdout.splitlines():
+            name = line.strip()
+            if not name:
+                continue
+            subprocess.run(
+                ["gcloud", "beta", "monitoring", "channels", "delete", name, "--quiet",
+                 "--force"],
+                check=True,
+            )
+            deleted.append(f"notification-channel:{name}")
+
         return deleted
 
     # --- Task 3 load-test auth tooling (not part of the CloudAdapter interface) -----

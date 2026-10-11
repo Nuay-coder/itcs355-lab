@@ -144,3 +144,15 @@ jobs:
           echo "image_digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "### Pushed image" >> "$GITHUB_STEP_SUMMARY"
           echo "\`$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
+
+          # Also push the training image -- Task 5's scheduled drift Cloud Run Job
+          # reuses it (same pinned deps, monitoring/ now included) with its
+          # ENTRYPOINT/CMD overridden at job-creation time, rather than keeping a
+          # second Dockerfile in sync.
+          TRAIN_DIGEST=$(python -c "
+          from src import config
+          from cloudlayer.factory import get_adapter
+          print(get_adapter(config.load(strict=False)).push_image('itcs355:${{ github.sha }}'))
+          ")
+          echo "train_image_digest=$TRAIN_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "\`$TRAIN_DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
