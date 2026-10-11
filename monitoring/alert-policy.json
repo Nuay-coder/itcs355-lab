@@ -1,0 +1,80 @@
+{
+  "displayName": "ITCS355 Lab 4 — feature drift (PSI)",
+  "documentation": {
+    "content": "One or more features' PSI exceeded ALERT_THRESHOLD (monitoring/drift.py) against the training reference window. Before retraining: check whether this is a legitimate, persistent distribution shift, a one-off bad batch, or an upstream pipeline break (schema/null-rate change) — see docs/postmortem-template.md's decision tree. Retraining on corrupted data destroys a working model faster than any schedule would.",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "temp_c PSI above threshold",
+      "conditionThreshold": {
+        "filter": "metric.type=\"custom.googleapis.com/itcs355/drift.psi.temp_c\" resource.type=\"global\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0.15,
+        "duration": "0s",
+        "aggregations": [{"alignmentPeriod": "3600s", "perSeriesAligner": "ALIGN_MAX"}],
+        "trigger": {"count": 1}
+      }
+    },
+    {
+      "displayName": "vibration_mm_s PSI above threshold",
+      "conditionThreshold": {
+        "filter": "metric.type=\"custom.googleapis.com/itcs355/drift.psi.vibration_mm_s\" resource.type=\"global\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0.15,
+        "duration": "0s",
+        "aggregations": [{"alignmentPeriod": "3600s", "perSeriesAligner": "ALIGN_MAX"}],
+        "trigger": {"count": 1}
+      }
+    },
+    {
+      "displayName": "pressure_kpa PSI above threshold",
+      "conditionThreshold": {
+        "filter": "metric.type=\"custom.googleapis.com/itcs355/drift.psi.pressure_kpa\" resource.type=\"global\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0.15,
+        "duration": "0s",
+        "aggregations": [{"alignmentPeriod": "3600s", "perSeriesAligner": "ALIGN_MAX"}],
+        "trigger": {"count": 1}
+      }
+    },
+    {
+      "displayName": "hours_since_service PSI above threshold",
+      "conditionThreshold": {
+        "filter": "metric.type=\"custom.googleapis.com/itcs355/drift.psi.hours_since_service\" resource.type=\"global\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0.15,
+        "duration": "0s",
+        "aggregations": [{"alignmentPeriod": "3600s", "perSeriesAligner": "ALIGN_MAX"}],
+        "trigger": {"count": 1}
+      }
+    },
+    {
+      "displayName": "load_pct PSI above threshold",
+      "conditionThreshold": {
+        "filter": "metric.type=\"custom.googleapis.com/itcs355/drift.psi.load_pct\" resource.type=\"global\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0.15,
+        "duration": "0s",
+        "aggregations": [{"alignmentPeriod": "3600s", "perSeriesAligner": "ALIGN_MAX"}],
+        "trigger": {"count": 1}
+      }
+    },
+    {
+      "displayName": "ambient_humidity PSI above threshold",
+      "conditionThreshold": {
+        "filter": "metric.type=\"custom.googleapis.com/itcs355/drift.psi.ambient_humidity\" resource.type=\"global\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0.15,
+        "duration": "0s",
+        "aggregations": [{"alignmentPeriod": "3600s", "perSeriesAligner": "ALIGN_MAX"}],
+        "trigger": {"count": 1}
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "86400s"
+  },
+  "severity": "WARNING"
+}
