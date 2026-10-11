@@ -842,5 +842,50 @@ class GcpAdapter(CloudAdapter):
             )
         return result.stdout.strip()
 
-    # emit_metric                       -> Lab 4 (Cloud Monitoring time series)
+    def emit_metric(self, name: str, value: float, unit: str = "None") -> None:
+        """Write one Cloud Monitoring custom metric data point.
+
+        There is no `gcloud` command for this — it is a REST-only API
+        (`projects.timeSeries.create`). Metric type is
+        `custom.googleapis.com/itcs355/<name>`, which Cloud Monitoring
+        auto-creates as a GAUGE/DOUBLE descriptor from the first write, so no
+        separate createMetricDescriptor call is needed. Resource type `global`
+        is the simplest choice available to any caller regardless of where it
+        runs (a GitHub Actions runner has no Cloud Run/GCE resource identity
+        of its own to attach a more specific monitored-resource type to).
+
+        `unit` is accepted to match the CloudAdapter signature, but Cloud
+        Monitoring only applies a unit via the metric descriptor, not per
+        point written here — stated rather than silently dropped.
+        """
+        import datetime
+
+        import google.auth
+        import google.auth.transport.requests
+        import requests
+
+        credentials, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/monitoring.write"]
+        )
+        credentials.refresh(google.auth.transport.requests.Request())
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        body = {
+            "timeSeries": [{
+                "metric": {"type": f"custom.googleapis.com/itcs355/{name}"},
+                "resource": {"type": "global", "labels": {"project_id": self.cfg.project_id}},
+                "points": [{
+                    "interval": {"endTime": now.isoformat()},
+                    "value": {"doubleValue": float(value)},
+                }],
+            }],
+        }
+        response = requests.post(
+            f"https://monitoring.googleapis.com/v3/projects/{self.cfg.project_id}/timeSeries",
+            headers={"Authorization": f"Bearer {credentials.token}"},
+            json=body, timeout=10,
+        )
+        if response.status_code >= 300:
+            raise RuntimeError(f"emit_metric failed ({response.status_code}): {response.text}")
+
     # generate                          -> Lab 5 (managed LLM endpoint; read usageMetadata for tokens)
