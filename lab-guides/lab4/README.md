@@ -233,6 +233,19 @@ Cloud Monitoring has no public API for listing fired incidents (confirmed: no
 the primary evidence here, not a queryable API response like every other check in
 this lab.
 
+Dashboard evidence (the live Cloud Monitoring dashboard from Task 4, "Last 1 hour"
+view, taken shortly after the alert fired):
+
+![Dashboard showing the drift spike](evidence/task6-dashboard-drift.png)
+
+The "Feature drift — temp_c PSI (rolling)" panel (bottom right) shows the
+`drift.psi.temp_c` line climbing from its flat 0 baseline up to meet the red
+`0.15` threshold line — the same shift the alert fired on, visible on the same
+dashboard the SLO's other three signals (request rate, error rate, latency) already
+use. The two annotation markers before the final spike are the earlier baseline
+scheduled runs (`09:00Z`, and the manual verification run from Task 5); the one at
+the spike is this exercise's.
+
 ### Five-line post-mortem
 
 **What fired:** Alert policy `ITCS355 Lab 4 — feature drift (PSI)`, condition `temp_c
