@@ -100,6 +100,45 @@ test`. PR closed without merging; full evidence in
 
 ---
 
+## Task 4 — Instrumentation, dashboard, SLO
+
+**`emit_metric`** (`cloudlayer/gcp.py`) — writes one Cloud Monitoring custom metric
+point via the REST `timeSeries.create` API (no `gcloud` command exists for this).
+Verified live: called directly, confirmed the point lands via `timeSeries.list`, then
+exercised through `python -m monitoring.drift --emit` against the real dataset.
+
+**RED signals** (request rate, error rate 4xx/5xx, latency p50/p95/p99) come from
+**Cloud Run's own free built-in metrics** (`run.googleapis.com/request_count`,
+`request_latencies`, both already split by `response_code_class`) rather than custom
+instrumentation in `service/app.py`. Same signals, zero risk to the request path —
+`emit_metric` on every `/predict` call would add a network round trip to the latency
+budget `tests/test_model_behaviour.py` is trying to protect.
+
+**Model version in production** — emitted once per deploy (`cd.yml`'s Deploy step,
+non-fatal on failure), not once per request. Confirmed live: 3 consecutive CD runs
+each wrote a `model_version` data point, visible via `timeSeries.list`.
+
+**Dashboard as code** (`monitoring/dashboard.gcp.json`) — `monitoring/dashboard.json`
+is Grafana/PromQL-shaped and can't be imported into Cloud Monitoring directly;
+translated the same 5 panels into Cloud Monitoring's dashboard schema and kept the
+Grafana file alongside it. Created live via `gcloud monitoring dashboards create
+--config-from-file=`
+(`projects/126202218664/dashboards/943309b8-711b-43ca-a005-1bc3cf55f941`) — two real
+schema rejections fixed along the way (an `xyChart` threshold only accepts `value`,
+not `color`/`direction`). **Teardown note:** this API has no label/tag support, so
+`cfg.tags()`-based teardown cannot find this dashboard — it must be deleted
+explicitly by id.
+
+**SLO** (`monitoring/slo.yaml`) — availability 99.5%/30d (~3.6h/month error budget,
+defended against this service's own traffic pattern, not a borrowed industry number);
+latency p95 < 200ms, confirmed to match `loadtest/k6.js:64` exactly; freshness ≤30
+days, with its `on_budget_exhausted` noting that Lab 5's retrain cadence must stay at
+or under 30 days or the two targets contradict each other. Every objective's
+`on_budget_exhausted` names a concrete mechanism (freeze deploys + roll back to last
+known-good, or trigger retraining) rather than staying silent.
+
+---
+
 ## Reports
 
 - [`reports/lab4-ci-evidence.md`](../../reports/lab4-ci-evidence.md) — Task 3's
