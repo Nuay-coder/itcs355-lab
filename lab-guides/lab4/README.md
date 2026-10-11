@@ -54,11 +54,12 @@ in production, since this project has never served real traffic.
 Validated by running each check's assertion against 9 deliberately corrupted copies of
 the in-memory dataframe (one per row above, plus a row-wise split for leakage) — **9/9
 rejected**, without touching `data/raw/sensors.csv` on disk. These are local sanity
-checks, not the failing-PR evidence Task 3 requires (`reports/lab4-ci-evidence.md`).
+checks, not the failing-PR evidence Task 3 requires (below, once done).
 
 ---
 
 ## Reports
 
-- [`reports/lab4-ci-evidence.md`](../../reports/lab4-ci-evidence.md) — the deliberately
-  bad commit, the failing CI run, and the test that caught it (Task 3).
+Task 3's failing-PR evidence (`reports/lab4-ci-evidence.md`) is not written yet — a
+link here would be broken (the repo's `links` check already caught this once). Linked
+once that report exists.
