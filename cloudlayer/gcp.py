@@ -34,6 +34,18 @@ def _split_gs_uri(uri: str) -> tuple[str, str]:
     return bucket, key
 
 
+def _last_nonblank_line(text: str) -> str:
+    """The identity token itself, stripped of any `gcloud` warning lines ahead of it.
+
+    `gcloud auth print-identity-token` writes diagnostics (e.g. "WARNING: This command
+    is using service account impersonation...") to stderr even on success, and callers
+    here merge stderr into stdout (stderr=subprocess.STDOUT) to keep failure diagnosis
+    simple. The token is always the last line gcloud prints.
+    """
+    lines = [line for line in text.strip().splitlines() if line.strip()]
+    return lines[-1] if lines else ""
+
+
 class InvokeError(RuntimeError):
     """Raised by GcpAdapter.invoke() on any non-2xx response. Carries status_code so a
     caller (e.g. the Task 2 smoke test) can deliberately assert on a specific failure —
@@ -534,7 +546,7 @@ class GcpAdapter(CloudAdapter):
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
             )
             if result.returncode == 0:
-                return result.stdout.strip()
+                return _last_nonblank_line(result.stdout)
 
             result = subprocess.run(
                 ["gcloud", "auth", "print-identity-token",
@@ -543,7 +555,13 @@ class GcpAdapter(CloudAdapter):
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
             )
             if result.returncode == 0:
-                token = result.stdout.strip()
+                # gcloud writes "WARNING: This command is using service account
+                # impersonation..." to stderr on every impersonated call, success
+                # included — not just failures — and it's merged into stdout here.
+                # Confirmed live: naively using result.stdout.strip() as the token
+                # prepends that warning line, producing a string requests rejects
+                # with InvalidHeader when sent as an Authorization: Bearer value.
+                token = _last_nonblank_line(result.stdout)
                 self._impersonated_token_cache = {
                     "audience": audience, "token": token, "expires_at": time.time() + 3600,
                 }
