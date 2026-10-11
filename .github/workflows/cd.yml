@@ -88,22 +88,6 @@ jobs:
           print(f'deployed: {name} -> {adapter.service_url(name)}')
           "
 
-      - name: DEBUG token diagnostics
-        run: |
-          echo "== tier1: ADC fetch_id_token =="
-          python3 -c "
-          import google.auth.transport.requests
-          import google.oauth2.id_token
-          try:
-              auth_request = google.auth.transport.requests.Request()
-              tok = google.oauth2.id_token.fetch_id_token(auth_request, 'https://itcs355-predict-staging-gpitnozf7q-as.a.run.app')
-              print('tier1 SUCCESS, token length:', len(tok))
-          except Exception as exc:
-              print('tier1 FAILED:', type(exc).__name__, exc)
-          "
-          echo "== tier3: impersonate deploy SA explicitly =="
-          gcloud auth print-identity-token --impersonate-service-account=itcs355-lab4-deploy@itcs355-6688033.iam.gserviceaccount.com --audiences=https://itcs355-predict-staging-gpitnozf7q-as.a.run.app || true
-
       - name: Smoke test
         # Three known payloads (single valid, batch valid, invalid -> 422), asserting
         # model_version on every successful response. A deploy that is not smoke-tested
