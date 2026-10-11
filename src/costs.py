@@ -28,6 +28,10 @@ PRICE_TABLE: dict[str, dict[str, float]] = {
         "n1-standard-4": 7.6,
         "e2-standard-4": 6.4,
         "n1-standard-4+t4": 25.2,
+        # Cloud Run "<cpu>-<memory>" units (deploy_service.py/cloudlayer/gcp.py's
+        # `instance` argument), not a VM type. Rate sourced in Lab 3
+        # (reports/lab3-load.md): 1 vCPU / 512 MiB, active (request-processing) rate.
+        "1-512Mi": 4.23,
     },
 }
 

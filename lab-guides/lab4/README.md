@@ -187,7 +187,31 @@ at this magnitude.
 
 ---
 
+## Teardown
+
+`make teardown LAB=4` run and confirmed — every resource `teardown()` was extended
+for in Task 5 came back deleted: `cloud-run:itcs355-predict-staging`,
+`cloud-run-job:itcs355-lab4-drift`, `scheduler:itcs355-lab4-drift-schedule`, the
+alert policy, and the notification channel. The Cloud Monitoring dashboard has no
+label support (noted in Task 4), so I deleted it explicitly by id afterward.
+Verified empty: `gcloud run services list`, `gcloud run jobs list`,
+`gcloud scheduler jobs list`, `gcloud alpha monitoring policies list`,
+`gcloud beta monitoring channels list`, `gcloud monitoring dashboards list` — all
+zero. `make test` and `make portability-audit` still pass after the teardown code
+change itself (a new `1-512Mi` entry in `src/costs.py`, needed for `make
+cost-report` below).
+
+Left in place, deliberately: the WIF pool/provider and deploy service account
+(IAM, not billed resources) and the GitHub secrets/variables pointing at them — Lab 5
+will need the same CD path.
+
+---
+
 ## Reports
 
 - [`reports/lab4-ci-evidence.md`](../../reports/lab4-ci-evidence.md) — Task 3's
   failing-PR evidence.
+- [`reports/lab4-cost.md`](../../reports/lab4-cost.md) — teardown cost report. No
+  real billing data was available for this short a window (no cost export
+  configured, and GCP billing has a processing lag), so the actual-spend figure is
+  an engineering estimate built from measured resource usage, stated as such.
