@@ -58,6 +58,35 @@ checks, not the failing-PR evidence Task 3 requires (below, once done).
 
 ---
 
+## Task 2 — CI pipeline
+
+GCP Workload Identity Federation (no stored keys): a WIF pool + GitHub OIDC provider
+scoped to `assertion.repository == 'Nuay-coder/itcs355-lab'`, and a deploy service
+account (`itcs355-lab4-deploy`) impersonated through it.
+
+- `ci.yml` — added a unit-test step ahead of data-contract tests, turned on
+  `--require-hashes`, and (main-only, gated on `push` to `main`) pushes the SHA-tagged
+  serving image via `GcpAdapter.push_image()`.
+- `cd.yml` — replaced the AWS/Azure stubs and echo placeholders with a real deploy:
+  resolve the digest CI already pushed, `adapter.deploy()` to a **staging-only** Cloud
+  Run service (`itcs355-predict-staging`, separate from Lab 3's production one, tagged
+  `lab=4` so its own teardown can find it), then the existing 3-payload smoke test.
+
+Verified live: `gcloud run services describe itcs355-predict-staging` shows
+`lab: '4'`; CD's Smoke test passed 3/3 (single, batch, invalid→422) on two consecutive
+runs after the fixes below.
+
+### Problems and fixes
+
+| Problem | Fix |
+|---|---|
+| `ImportError: aiplatform_v1` on CD's first real run | `requirements.txt` never locked `google-cloud-aiplatform` — it only worked locally because the dev machine had it installed outside the pinned file. Added it to `requirements.in` and regenerated with `uv pip compile` (the tool the original lockfile's header says it was built with — plain `pip-compile` silently drops the `setuptools` entry `uv` resolves via `zc-lockfile`). |
+| `403 aiplatform.models.get` denied | Deploy SA had no Vertex AI read access. Granted `roles/aiplatform.viewer`. |
+| `PERMISSION_DENIED` impersonating the training SA | `adapter.invoke()`'s token fallback chain's last tier impersonates `TRAINING_SERVICE_ACCOUNT`, which the deploy SA has no rights over, and the untargeted ambient tier ahead of it is flaky under WIF — it passed once, then failed identically on the very next run with no config change. Pointed the smoke test's `TRAINING_SERVICE_ACCOUNT` at the deploy SA itself (self-impersonation; it already holds `serviceAccountTokenCreator` on itself). |
+| `requests.exceptions.InvalidHeader` once impersonation finally succeeded | Real bug in `cloudlayer/gcp.py`: `_fetch_identity_token()` merges `stderr` into `stdout` and returned the whole thing as the token — `gcloud`'s "using service account impersonation" warning (printed on *every* impersonated call, not just failures) ended up prepended to the real JWT. `mint_loadtest_token()` had already hit and fixed this exact bug by keeping `stderr` separate; this function never got the same fix. Fixed by taking only the last non-blank line. |
+
+---
+
 ## Reports
 
 Task 3's failing-PR evidence (`reports/lab4-ci-evidence.md`) is not written yet — a
