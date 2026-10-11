@@ -165,13 +165,23 @@ evidence here, not a queryable response like everywhere else in this lab.*
 *The "Feature drift — temp_c PSI" panel climbing to meet the red threshold line, on
 the same live dashboard from Task 4.*
 
-**Post-mortem:** The alert fired on a synthetic injection, not a real incident —
-schema and null rate were unchanged, only PSI caught it. I took no action: a single
-test run isn't evidence of a persistent shift, and retraining on it would mean
-retraining on a value I manufactured, not anything the fleet produced. To detect a
-real version of this faster, the hourly Scheduler cadence is the lever to tighten
-(e.g. to 15 minutes), and a mean-shift-specific check is worth adding alongside PSI
-since `mix` — the most realistic mode — didn't alert at this magnitude.
+**Post-mortem:**
+
+**What fired:** `temp_c` PSI alert, value 0.383 vs threshold 0.15, at `09:09:00Z`.
+
+**True cause:** A synthetic injection (`inject_drift.py --mode shift`), not a real
+event — schema and null rate were unchanged.
+
+**Retrain, roll back, or no action:** No action. One test run isn't evidence of a
+persistent shift; retraining on it would mean retraining on a value I manufactured.
+
+**Cost if unnoticed for a week:** Not computable confidently — this fleet has no real
+traffic or cost-per-dispatch number. If real and persistent, it would bias risk
+scores and dispatch decisions for every affected machine.
+
+**Prevent/detect faster:** Tighten the hourly Scheduler cadence (e.g. to 15 min), and
+add a mean-shift check alongside PSI — `mix`, the most realistic mode, didn't alert
+at this magnitude.
 
 ---
 
