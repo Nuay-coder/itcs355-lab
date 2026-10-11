@@ -175,9 +175,11 @@ event — schema and null rate were unchanged.
 **Retrain, roll back, or no action:** No action. One test run isn't evidence of a
 persistent shift; retraining on it would mean retraining on a value I manufactured.
 
-**Cost if unnoticed for a week:** Not computable confidently — this fleet has no real
-traffic or cost-per-dispatch number. If real and persistent, it would bias risk
-scores and dispatch decisions for every affected machine.
+**Cost if unnoticed for a week:** Assuming all 240 fleet machines (`src/data.py`'s
+`N_MACHINES`) got scored hourly, `240 × 24 × 7 = 40,320` predictions would run
+against the shifted `temp_c` over the week. That's an exposure estimate, not a count
+of actually-wrong predictions or real money lost — this service has no real traffic
+or cost-per-dispatch figure, and my test used one batch, not continuous scoring.
 
 **Prevent/detect faster:** Tighten the hourly Scheduler cadence (e.g. to 15 min), and
 add a mean-shift check alongside PSI — `mix`, the most realistic mode, didn't alert
