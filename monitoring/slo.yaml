@@ -7,26 +7,46 @@ service: itcs355-predict
 
 objectives:
   - name: availability
-    target: 0.995              # TODO(Lab 4): your number, and defend it
+    # 99.5% over 30 days = an error budget of ~3.6 hours/month. This endpoint has never
+    # served real users (reports/lab3-cost.md), so there's no production incident history
+    # to calibrate against; 99.5% is chosen as a middle ground between a batch job's
+    # tolerance (no SLO needed) and a paid SaaS's (99.9%+), appropriate for a service with
+    # occasional, not continuous, real traffic.
+    target: 0.995
     window: 30d
     measurement: "successful responses / total responses, excluding 4xx"
     on_budget_exhausted: |
-      TODO(Lab 4): what actually happens. Freeze deploys? Page someone? Fall back to the
-      last known-good version? Accept it and revise the target? All are defensible;
-      silence is not.
+      Freeze non-critical deploys to this service until the budget resets. Roll back to
+      the last known-good revision (Lab 3 Task 4 already proved this works via Cloud
+      Run's traffic-split) rather than trying to forward-fix under pressure. Page the
+      on-call only if the burn rate is fast (budget would exhaust in under 24h at the
+      current rate) -- a slow linear burn across the full 30-day window can wait for the
+      next business day.
 
   - name: latency
-    target_p95_ms: 200         # TODO(Lab 4): must match the target you set in loadtest/k6.js
+    # Must equal the k6 p95 threshold in loadtest/k6.js:64 (`predict_latency_ms: ['p(95)<200']`)
+    # -- an SLO that disagrees with the load test's own pass/fail line is a contradiction,
+    # not two independent numbers.
+    target_p95_ms: 200
     window: 7d
     measurement: "p95 of /predict, measured at the endpoint, not at the client"
     on_budget_exhausted: |
-      TODO(Lab 4)
+      First check for cold starts (Cloud Run scale-to-zero, reports/lab3-load.md) before
+      assuming a code regression -- a cold-start spike inflates p95 without any change to
+      steady-state latency. If steady-state latency itself regressed, roll back to the
+      last known-good revision rather than deploying a fix under the same pressure that
+      caused the regression. If the cause is sustained traffic above what min-instances=0
+      scaling keeps warm, raise MAX_INSTANCES or set minScale>0 temporarily, accepting the
+      cost increase documented in reports/lab3-cost.md.
 
   - name: freshness
     target_max_model_age_days: 30
     window: continuous
     measurement: "days since the production model version was trained"
     on_budget_exhausted: |
-      TODO(Lab 4): this one interacts with your retraining trigger in Lab 5. Keep them
-      consistent — an SLO demanding a 30-day-old model and a 90-day retrain schedule is
-      a contradiction you should notice here rather than in production.
+      Trigger the retraining pipeline (Lab 5) rather than waiting for its own schedule.
+      This SLO's 30-day ceiling is deliberately tighter than a quarterly retrain cadence
+      would allow -- Lab 5's retrain trigger must run at an interval of 30 days or less,
+      or this SLO and that schedule contradict each other and one of them is lying. If
+      the retrain pipeline itself is broken (not just slow), that is the actual incident;
+      do not paper over it by raising this target to match a broken schedule.
