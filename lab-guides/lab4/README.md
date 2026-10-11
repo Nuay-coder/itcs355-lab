@@ -183,6 +183,107 @@ file from an actual logging sink instead; building one was out of scope here.
 
 ---
 
+## Task 6 — The injected drift exercise
+
+### Which statistic catches which mode
+
+Ran all three `scripts/inject_drift.py` modes against `temp_c` at default magnitude:
+
+| Mode | PSI | KS | Verdict | Alert fired? |
+|---|---|---|---|---|
+| `shift` (+6 mean) | 0.38333 | 0.24567 | significant | Yes |
+| `scale` (×6 spread) | 1.90368 | 0.38333 | significant | Yes |
+| `mix` (reweight 1/5 of machines ×5) | 0.00873 | 0.03417 | stable | **No** |
+
+`mix` genuinely did not trigger at this magnitude — confirming the handout's own
+framing of it as "the realistic one, and the hardest to spot" with real numbers, not
+just restating the claim. `scale` moved both statistics further than `shift` here
+because a ×6 spread multiplier is a larger effective distortion than a flat +6 shift
+against this feature's ~9-unit standard deviation; the two injected magnitudes are not
+calibrated to be equivalent in effect size, only equal in their `--magnitude` argument.
+
+### The real exercise — through the actual scheduled path
+
+| Event | Timestamp (UTC) |
+|---|---|
+| Injected `temp_c +6` (shift mode), uploaded to `gs://.../lab4/current.csv` | `2026-10-11T09:05:40Z` |
+| Triggered via the real Cloud Scheduler job (`gcloud scheduler jobs run`, not a direct job execution) | `2026-10-11T09:06:00Z` |
+| Cloud Run Job execution `itcs355-lab4-drift-8vgb6` ran, scored PSI=0.38333, exited 2 (ALERT) | started `09:06:08Z` |
+| `drift.psi.temp_c` metric landed in Cloud Monitoring | `09:06:37Z` |
+| **Alert email fired** (`[ALERT - Warning] temp_c PSI above threshold on itcs355-6688033`) | `09:09:00Z` |
+
+**Detection latency: 3 minutes 20 seconds** (injection → alert). Breaking that down:
+scheduler trigger → alert was 3m00s, and of that, 2m23s was Cloud Monitoring's own
+alert-evaluation delay (metric landed at `09:06:37Z`, alert started `09:09:00Z`) — the
+job itself ran in under 30 seconds. This run used a manual scheduler trigger
+immediately after injection; with the job's actual **hourly** cadence, worst-case
+detection latency in production would be up to ~1 hour plus this same ~2-3 minute
+evaluation delay, not the 3m20s observed here.
+
+Alert evidence (screenshot of the actual email received):
+
+![Drift alert email](evidence/task6-alert-email.png)
+
+The email confirms: policy `ITCS355 Lab 4 — feature drift (PSI)`, condition `temp_c
+PSI above threshold`, metric `custom.googleapis.com/itcs355/drift.psi.temp_c`, value
+`0.38333` against threshold `0.15`, start time `Oct 11, 2026 at 9:09AM UTC`.
+
+Cloud Monitoring has no public API for listing fired incidents (confirmed: no
+`gcloud`/REST method exists for it — only the Console UI shows them), so the email is
+the primary evidence here, not a queryable API response like every other check in
+this lab.
+
+### Five-line post-mortem
+
+**What fired:** Alert policy `ITCS355 Lab 4 — feature drift (PSI)`, condition `temp_c
+PSI above threshold`, on metric `custom.googleapis.com/itcs355/drift.psi.temp_c` =
+`0.38333` against threshold `0.15`. Started `2026-10-11T09:09:00Z` UTC.
+
+**True cause:** A synthetic injection (`scripts/inject_drift.py --feature temp_c
+--mode shift --magnitude 6`), not a real upstream event. Schema and null rate were
+unchanged (the shifted value, 85.58°C mean, is still inside `PLAUSIBLE_RANGES`
+(-10, 140), so the data contract tests would still pass on this file — only PSI
+caught it). Per the handout's own decision tree: schema/null-rate unchanged → input
+distribution moved → is it legitimate and persistent? This is a single injected
+batch, run once, not observed across multiple consecutive scheduled windows.
+
+**Retrain, roll back, or no action — and why:** **No action; tighten nothing yet,
+keep watching.** A one-off synthetic shift from a single test run is not evidence of
+a persistent real-world change — retraining on it would mean retraining on a value I
+manufactured, not on anything the fleet actually produced. This would change if the
+same feature kept showing PSI above threshold across several consecutive hourly
+runs with no further injection, or if there were independent confirmation (a fleet
+firmware changelog, a sensor replacement log) that `temp_c`'s true distribution had
+actually moved.
+
+**What this would have cost if unnoticed for a week:** Assuming this were a real,
+persistent +6°C sensor miscalibration across the fleet rather than a one-off test:
+the synthetic data generator (`scripts/make_dataset.py`) weights `temp_c` into the
+failure-risk logit at `+0.052` per degree, so a systematic +6°C read inflates every
+affected machine's predicted risk by roughly `0.052 × 6 ≈ 0.31` logit-units — enough
+to push many borderline machines across the decision threshold into
+"flag for maintenance." At Lab 3's measured throughput (~96.5 req/s capacity,
+`reports/lab3-load.md`) and assuming only a small fraction of that is real traffic
+(this service has never served real users, `reports/lab3-cost.md`), the realistic
+cost is not infrastructure spend but **decision cost**: a week of systematically
+over-flagged (or under-flagged, if the miscalibration ran the other way) maintenance
+dispatches. Without a real cost-per-dispatch or cost-per-missed-failure number for
+this synthetic fleet, a precise THB figure would be fabricated — the honest estimate
+is "however many additional maintenance visits per week times their cost, for the
+borderline fraction of the fleet," not a number this project has the data to compute
+confidently.
+
+**How to prevent or detect it faster:** The 2m23s Cloud Monitoring evaluation delay
+is fixed and small; the **hourly Cloud Scheduler cadence is the real lever** — a
+shift to every 15 minutes would cut worst-case detection latency from ~1 hour to
+~15 minutes for a small increase in Cloud Run Job invocation count (the job itself
+runs in under 30 seconds, so cost impact is minor). A concrete second change: add a
+mean-shift-specific check (not just PSI) alongside the existing drift detector, since
+`mix` mode — the one closest to a real "fleet composition changed" scenario — scored
+PSI=0.00873 here and would not have alerted at all at this magnitude.
+
+---
+
 ## Reports
 
 - [`reports/lab4-ci-evidence.md`](../../reports/lab4-ci-evidence.md) — Task 3's
