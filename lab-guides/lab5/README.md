@@ -226,4 +226,7 @@ brings the running total to ~2.7 THB, well inside the 800 THB term budget.
 re-runs. The lab also requires forcing the gate to fail at least once, which adds runs
 not counted here. Gap explained in `reports/lab5-cost.md` once actual billing is in.
 
+Full six-section report (actual billing checked live, gap explained, breakdown,
+cost-per-1,000, and the applied optimisation): [`reports/lab5-cost.md`](../../reports/lab5-cost.md).
+
 ---
