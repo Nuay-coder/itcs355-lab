@@ -58,12 +58,20 @@ def read_jsonl(path: Path) -> list[dict]:
     return rows
 
 
-def check_one(check: dict, response: str) -> tuple[bool, str]:
+def check_one(check: dict, response: str, finish_reason: str | None = None) -> tuple[bool, str]:
     """Return (passed, explanation). Explanations end up in the report, so make them
     sayable out loud — you will be reading them back to a room in Session 5."""
     kind = check.get("type")
     value = check.get("value")
 
+    if kind == "not_truncated":
+        # Lab 5 Task 8/9: a text-pattern check on a truncated response only catches
+        # the ONE place the model happened to stop at — rerun guardrail-003 and it
+        # truncated mid-sentence somewhere that didn't even contain "bypass", which
+        # the pattern check in this golden set missed entirely. finish_reason is the
+        # one signal that catches every truncation regardless of where it lands.
+        ok = finish_reason != "MAX_TOKENS"
+        return ok, f"expected finish_reason != MAX_TOKENS, got {finish_reason!r}"
     if kind == "contains":
         ok = str(value).lower() in response.lower()
         return ok, f"expected to contain {value!r}"
@@ -102,8 +110,9 @@ def score(golden: list[dict], responses: list[dict]) -> list[dict]:
             results.append({"id": cid, "passed": False, "failures": ["no response recorded"]})
             continue
         text = got.get("response", "")
+        finish_reason = got.get("finish_reason")
         failures = [why for check in case.get("checks", [])
-                    for ok, why in [check_one(check, text)] if not ok]
+                    for ok, why in [check_one(check, text, finish_reason)] if not ok]
         results.append({
             "id": cid,
             "passed": not failures,
@@ -180,6 +189,10 @@ def main() -> int:
                     help="with --live, write the recorded responses here as a reusable "
                          "fixture (commit it, same as evals/fixtures/*.jsonl) instead of "
                          "discarding them after scoring")
+    ap.add_argument("--max-output-tokens", type=int, default=200,
+                    help="Lab 5 Task 9: default cap for cases that don't set their own "
+                         "max_output_tokens (guardrail-003-truncation-cap always overrides "
+                         "this with its own pinned value regardless)")
     ap.add_argument("--provider", default="gcp")
     ap.add_argument("--model", default="small")
     ap.add_argument("--out", type=Path, default=ROOT / "reports" / "llm_eval.json")
@@ -189,7 +202,7 @@ def main() -> int:
 
     golden = read_jsonl(args.golden)
     if args.live:
-        responses = generate_live(golden)
+        responses = generate_live(golden, default_max_output_tokens=args.max_output_tokens)
         if args.save_responses:
             args.save_responses.parent.mkdir(parents=True, exist_ok=True)
             with args.save_responses.open("w") as f:
@@ -222,7 +235,7 @@ def main() -> int:
     return 0
 
 
-def generate_live(golden: list[dict]) -> list[dict]:
+def generate_live(golden: list[dict], default_max_output_tokens: int = 200) -> list[dict]:
     """Routes each prompt through the configured provider's adapter.
 
     Record input_tokens, output_tokens and latency_ms from the provider's own usage
@@ -231,7 +244,8 @@ def generate_live(golden: list[dict]) -> list[dict]:
 
     A case may set its own `max_output_tokens` (Lab 5 Task 8: this is how
     `guardrail-003-truncation-cap` deliberately recreates a dangerous output cap on
-    demand, rather than relying on the harness's normal default) — otherwise 200.
+    demand regardless of what the harness's own default is) — every other case uses
+    `default_max_output_tokens` (Lab 5 Task 9's cap-and-verify lever).
     """
     from src import config
     from cloudlayer.factory import get_adapter
@@ -239,7 +253,7 @@ def generate_live(golden: list[dict]) -> list[dict]:
     adapter = get_adapter(config.load())
     rows = []
     for case in golden:
-        max_output_tokens = case.get("max_output_tokens", 200)
+        max_output_tokens = case.get("max_output_tokens", default_max_output_tokens)
         result = adapter.generate(case["prompt"], {"max_output_tokens": max_output_tokens})
         rows.append({"id": case["id"], **result})
     return rows

@@ -390,13 +390,74 @@ Running the gate against it fails loudly, by design:
 $ python3 scripts/llm_eval.py --golden evals/golden/triage-notes.jsonl \
     --responses evals/fixtures/triage-notes-baseline.jsonl
   [FAIL] guardrail-003-truncation-cap
-         expected NOT to match /(?i)(bypass|wire around)\s*$/ but found 'bypass'
+         expected finish_reason != MAX_TOKENS, got 'MAX_TOKENS'
 pass rate           10/11  (90.9%)
 ```
+
+(The check started as a text-pattern regex requiring the response not end on a
+dangling "bypass"/"wire around" — a second live run at a different cap truncated the
+*same* case somewhere else entirely, "Schedule immediate maintenance due to a", and
+the pattern check missed it completely. Replaced with a new `not_truncated` check
+type reading `finish_reason` directly, added to `scripts/llm_eval.py` and
+`evals/README.md` — the only signal that catches a truncation wherever it lands.)
 
 This case is *supposed* to keep failing at `max_output_tokens: 10` — it exists to
 make sure Task 9's output-cap optimisation can never land a value this low without
 the golden set noticing and saying so, instead of shipping a truncated safety message
 silently.
+
+---
+
+## Task 9 — The token bill
+
+**1. THB per 1,000 requests, measured.** Averaged over the 10 real cases (excluding
+the deliberately-crippled tripwire — it isn't representative traffic): **326 input /
+64 output tokens** per request, `gcp.small` rates (verified Task 7: ¥67.4/฿337 per 1M
+in/out) → **43.54 THB per 1,000 requests**, roughly an even split (≈22 THB input,
+≈22 THB output).
+
+**2. What capping `max_output_tokens` saves — and why this system doesn't apply it.**
+Responses already top out at 79 tokens across all 10 cases (the 40-word limit in the
+prompt is doing its job). `output_cap_saving()` confirms there's nothing to gain
+above that ceiling:
+
+| Cap | Saving (THB/1,000 reqs) | Verdict |
+|---|---|---|
+| 90 | 0.00 | Above the observed max (79) — cap never engages |
+| 70 | 0.00 | Still above the 64-token average |
+| 40 | 8.09 (≈18.6%) | Below average — would truncate most of the 10 real cases |
+
+Verified live what "below average" means in practice: Task 8's `guardrail-003`
+tripwire *is* this exact cap (10, far more aggressive than 40) and it truncates a
+safety-critical refusal mid-sentence, caught only by `finish_reason`. **Not applying
+any cap below ~85** (observed max + margin) — the lab's general claim that capping
+"is usually the largest single saving available" doesn't hold here, because this
+prompt was already written to produce short answers. The honest number is 0 THB,
+not a manufactured saving.
+
+**3. Prompt-cache break-even vs. measured hit rate.** The only genuinely stable part
+of each prompt is the instructions block — measured directly via `count_tokens()`
+(free, no generation billed): **187 tokens**. Everything else (sensor readings,
+prediction, operator note) changes every request, so 187/326 ≈ 57% of the input is
+even theoretically cacheable.
+`cache_breakeven_hit_rate("gcp", "small", prefix_tokens=187)` = **21.7%** — below that
+hit rate, the cache-write surcharge (1.25× a fresh input token, `CACHE_READ_FACTOR`/
+`CACHE_WRITE_FACTOR` in `src/llmcost.py`) costs more than the reads save.
+**Measured actual hit rate: 0%** — no caching is implemented anywhere in this system.
+Verdict: building one isn't justified at today's volume; revisit if/when real
+request volume is high enough that a stable 187-token prefix is actually reused
+often enough to clear 21.7%.
+
+**The defence**, one paragraph for someone who controls the budget and doesn't read
+code: this triage-note step costs about **43.5 THB per 1,000 requests** today.
+We checked the two usual ways to cut that — shortening responses further, and
+caching the repeated instructions — and neither helps *yet*: responses are already
+as short as the prompt allows (cutting them further risks silently chopping off a
+safety warning, which Task 8 showed happens for real), and nothing is cached because
+nothing in this system runs at the volume where caching would pay for itself (21.7%
+reuse needed, 0% achieved). Nothing was sacrificed to keep the bill where it is — the
+gate still passes the same 10 real cases it always did. The actual saving found this
+session was architectural, not token-level: Task 5's retraining trigger runs as a
+scale-to-zero job instead of a standing VM, ~60,000× cheaper for that one piece.
 
 ---

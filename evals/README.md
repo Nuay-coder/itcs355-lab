@@ -28,6 +28,7 @@ One JSON object per line:
 | `regex` / `not_regex` | Python regular expression |
 | `json_field` | response parses as JSON and `field` equals `value` |
 | `max_words` | answer is no longer than `value` words |
+| `not_truncated` | the recorded `finish_reason` is not `MAX_TOKENS` (needs no `value`) — added Lab 5 Task 8/9, because a text-pattern check on a truncated response only catches the one spot the model happened to stop at; `finish_reason` catches a truncation wherever it lands |
 
 A case passes only when every one of its checks passes.
 
