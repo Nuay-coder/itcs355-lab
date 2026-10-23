@@ -176,6 +176,10 @@ def main() -> int:
                     help="recorded responses; omit and pass --live to call your adapter")
     ap.add_argument("--live", action="store_true",
                     help="generate responses through cloudlayer instead of a fixture")
+    ap.add_argument("--save-responses", type=Path,
+                    help="with --live, write the recorded responses here as a reusable "
+                         "fixture (commit it, same as evals/fixtures/*.jsonl) instead of "
+                         "discarding them after scoring")
     ap.add_argument("--provider", default="gcp")
     ap.add_argument("--model", default="small")
     ap.add_argument("--out", type=Path, default=ROOT / "reports" / "llm_eval.json")
@@ -186,6 +190,12 @@ def main() -> int:
     golden = read_jsonl(args.golden)
     if args.live:
         responses = generate_live(golden)
+        if args.save_responses:
+            args.save_responses.parent.mkdir(parents=True, exist_ok=True)
+            with args.save_responses.open("w") as f:
+                for row in responses:
+                    f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            print(f"recorded {len(responses)} live responses -> {shown(args.save_responses)}")
     else:
         responses = read_jsonl(args.responses)
 

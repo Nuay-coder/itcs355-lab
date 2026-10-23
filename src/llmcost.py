@@ -19,9 +19,13 @@ Three levers move an LLM bill, in the order they are worth pulling:
 
 Prices are THB per 1,000,000 tokens. They change often and differ by region.
 
-TODO(Lab 5): verify every rate below against your provider's pricing page for YOUR region
-before you cite a cost figure. Record the date you checked in your cost report. A stale
-price presented as current is exactly what the report is designed to catch.
+Verified 2026-10-23 against the Vertex AI pricing page, USD->THB at 33.7 (today's
+mid-market rate): `gcp.small` below is `gemini-4-argon`'s actual introductory rate
+($2/$10 per 1M in/out through 2026-11-30, doubling to $4/$20 from 2026-12-01) — the
+only Gemini model this project could actually reach (cloudlayer/gcp.py::generate),
+not the scaffold's original placeholder. aws/azure rates are still the scaffold's
+originals — TODO(Lab 5): verify those too if the AWS/Azure adapters ever get a real
+`generate()` call (Task 4B only implements upload/download/invoke, not generate).
 """
 from __future__ import annotations
 
@@ -41,7 +45,7 @@ TOKEN_PRICE_TABLE: dict[str, dict[str, tuple[float, float]]] = {
         "large": (550.0, 2750.0),
     },
     "gcp": {
-        "small": (8.5, 34.0),
+        "small": (67.4, 337.0),  # gemini-4-argon, introductory, verified 2026-10-23
         "medium": (105.0, 525.0),
         "large": (525.0, 2625.0),
     },

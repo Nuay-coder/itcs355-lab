@@ -975,4 +975,52 @@ class GcpAdapter(CloudAdapter):
         if response.status_code >= 300:
             raise RuntimeError(f"emit_metric failed ({response.status_code}): {response.text}")
 
-    # generate                          -> Lab 5 (managed LLM endpoint; read usageMetadata for tokens)
+    # Lab 5 Part B: THB per 1M tokens in src/llmcost.py's "gcp" table keys off this
+    # tier name ("small"), not the literal model string — keep the two in sync if
+    # this model changes. Confirmed live 2026-10-23: this project's only reachable
+    # Gemini model is served from the "global" endpoint, not this account's usual
+    # `self.cfg.region` (asia-southeast1 has no publisher-model access at all) —
+    # hardcoded here rather than reusing cfg.region, which every other method in
+    # this file legitimately does use.
+    _GENERATE_MODEL = "gemini-4-argon"
+    _GENERATE_LOCATION = "global"
+
+    def generate(self, prompt: str, params: dict[str, Any]) -> dict[str, Any]:
+        """Call Vertex AI's Gemini on-demand endpoint once.
+
+        Token counts come from `response.usage_metadata` — Vertex's own count of what
+        it actually tokenised the request/response into, not a word-count estimate.
+        `max_output_tokens` is the one knob Task 9 needs exposed at this seam, since
+        output tokens dominate the bill; everything else about the request is fixed.
+
+        `output_tokens` = `candidates_token_count` + `thoughts_token_count`: this
+        model reasons before answering by default, and Vertex bills thinking tokens
+        at the same output rate as the visible answer (confirmed live: a 7-token
+        "Hello there." reply carried 144 thinking tokens in the same response,
+        `total_token_count` = prompt + candidates + thoughts exactly). Counting only
+        `candidates_token_count` here would under-report the real bill by over an
+        order of magnitude on this model.
+        """
+        import time
+
+        import vertexai
+        from vertexai.generative_models import GenerationConfig, GenerativeModel
+
+        vertexai.init(project=self.cfg.project_id, location=self._GENERATE_LOCATION)
+        model = GenerativeModel(self._GENERATE_MODEL)
+        generation_config = GenerationConfig(
+            max_output_tokens=params.get("max_output_tokens", 1024),
+        )
+
+        start = time.monotonic()
+        response = model.generate_content(prompt, generation_config=generation_config)
+        latency_ms = int((time.monotonic() - start) * 1000)
+
+        usage = response.usage_metadata
+        output_tokens = usage.candidates_token_count + getattr(usage, "thoughts_token_count", 0)
+        return {
+            "response": response.text,
+            "input_tokens": usage.prompt_token_count,
+            "output_tokens": output_tokens,
+            "latency_ms": latency_ms,
+        }
