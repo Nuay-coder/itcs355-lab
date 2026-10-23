@@ -24,6 +24,7 @@ All code lives at the repository root and grows lab by lab. Each lab has its own
 | 2 | Experiment tracking and model registry | [`lab2`](lab-guides/lab2/README.md) | 
 | 3 | Serving, load testing, rollback | [`lab3`](lab-guides/lab3/README.md) | 
 | 4 | CI/CD, observability, drift | [`lab4`](lab-guides/lab4/README.md) | 
+| 5 | Cloud MLOps and cost | [`lab5`](lab-guides/lab5/README.md) | 
 
 ---
 
