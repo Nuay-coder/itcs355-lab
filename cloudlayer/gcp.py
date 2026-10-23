@@ -1018,9 +1018,17 @@ class GcpAdapter(CloudAdapter):
 
         usage = response.usage_metadata
         output_tokens = usage.candidates_token_count + getattr(usage, "thoughts_token_count", 0)
+        # Lab 5 Task 8: a capped max_output_tokens can cut a safety-critical refusal
+        # off mid-sentence (confirmed live: "Do not bypass or wire around" with no
+        # object, at max_output_tokens=10) with no sign of it in `response` itself —
+        # the API's own finish_reason is the only place that's visible, and nothing
+        # read it before this. Surfaced here so a caller (or a golden-set check) can
+        # tell "complete answer" from "silently cut off" instead of guessing.
+        finish_reason = response.candidates[0].finish_reason
         return {
             "response": response.text,
             "input_tokens": usage.prompt_token_count,
             "output_tokens": output_tokens,
             "latency_ms": latency_ms,
+            "finish_reason": finish_reason.name if hasattr(finish_reason, "name") else str(finish_reason),
         }

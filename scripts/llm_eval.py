@@ -223,11 +223,15 @@ def main() -> int:
 
 
 def generate_live(golden: list[dict]) -> list[dict]:
-    """TODO(Lab 5): route each prompt through your adapter's `generate`.
+    """Routes each prompt through the configured provider's adapter.
 
     Record input_tokens, output_tokens and latency_ms from the provider's own usage
     fields — do not estimate them by counting words. Every provider tokenises
     differently, and an estimated token count in a cost report is a fabricated number.
+
+    A case may set its own `max_output_tokens` (Lab 5 Task 8: this is how
+    `guardrail-003-truncation-cap` deliberately recreates a dangerous output cap on
+    demand, rather than relying on the harness's normal default) — otherwise 200.
     """
     from src import config
     from cloudlayer.factory import get_adapter
@@ -235,7 +239,8 @@ def generate_live(golden: list[dict]) -> list[dict]:
     adapter = get_adapter(config.load())
     rows = []
     for case in golden:
-        result = adapter.generate(case["prompt"], {"max_output_tokens": 200})
+        max_output_tokens = case.get("max_output_tokens", 200)
+        result = adapter.generate(case["prompt"], {"max_output_tokens": max_output_tokens})
         rows.append({"id": case["id"], **result})
     return rows
 
