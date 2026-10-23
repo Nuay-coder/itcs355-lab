@@ -135,6 +135,75 @@ candidate from being registered once it does.
 
 ---
 
+## Task 4 — The portability test
+
+**Part A — audit.** `make portability-audit` passes, before and after this task's
+changes: `src`, `service`, `monitoring`, `tests` contain no provider-specific strings.
+
+**Part B — swap.** Chosen second provider: **AWS** (Azure was the original plan, but
+the only Azure account available — a Mahidol student account — has zero subscriptions;
+switching providers mid-task would also have meant starting Task 4B's code from zero,
+so AWS stayed the choice once a usable AWS account existed). Implemented exactly
+`upload`, `download`, `invoke` in `cloudlayer/aws.py`: `upload`/`download` via
+`boto3`'s S3 client against `BLOB_URI`; `invoke` against Bedrock's on-demand
+`InvokeModel` (Claude 3 Haiku — there is no SageMaker endpoint to call, and standing
+one up is explicitly out of scope: "you are not migrating the whole system").
+
+Ran `scripts/portability_swap_check.py --second-provider aws` for real, against a real
+AWS account set up during this task. **Every method failed, and every failure is a
+genuine finding, not a bug in the new code:**
+
+| Method | Result | Real cause |
+|---|---|---|
+| `upload` | `ParamValidationError: Invalid bucket name "gs:"` | The swap script changes only `provider`, leaving `BLOB_URI` as `gs://itcs355-6688033/itcs355` — a GCS-shaped URI, not S3-shaped. `cloud.env`'s values are *not* provider-neutral despite `provider` being a single flag. |
+| `download` | Same `"gs:"` bucket-name error | Same root cause — `download`'s input URI comes from the same config. |
+| `invoke` | First: `EndpointConnectionError` against `bedrock-runtime.asia-southeast1.amazonaws.com` (not a real AWS endpoint) | `cfg.region` is `asia-southeast1` — GCP's region-naming convention. AWS's equivalent region is `ap-southeast-1`. Region names leak the same way `BLOB_URI`'s scheme does. |
+| `invoke` (region hand-corrected) | `AccessDeniedException: Your account is currently being verified` | Not a code or config problem at all — Bedrock model invocation is held for new AWS accounts pending an automatic fraud-prevention check (AWS's own message: "normally takes less than 2 hours"). |
+
+A fourth, separate blocker was found auditing the account before any of this: the AWS
+account itself sits inside an **AWS Organization** with a **Service Control Policy**
+(`arn:aws:organizations::761774876005:policy/.../p-nj126grk`) that explicitly denies
+`s3:CreateBucket` and `s3:ListAllMyBuckets` account-wide — discovered by the user, who
+did not know the account belonged to an Organization at all. No bucket could be created
+to even attempt `upload`/`download` against real S3, independent of the config leaks
+above.
+
+**Part C — write-up.**
+
+- **Hardest method:** `invoke`, but not for a coding reason — Bedrock's request shape
+  (`messages`/`anthropic_version`/`max_tokens`) has nothing in common with Cloud Run's
+  plain HTTP `/predict`, so `endpoint`/`payload` from the shared `CloudAdapter`
+  interface map onto it only nominally (`endpoint` is accepted and ignored entirely).
+  `upload`/`download` were the easy part, code-wise — boto3's S3 client is a close
+  mirror of `google-cloud-storage`'s.
+- **Where the abstraction genuinely leaked:** `cloud.env`'s `BLOB_URI` and `REGION`
+  are stored as provider-formatted strings (`gs://...`, `asia-southeast1`), not neutral
+  values. `CLOUD_PROVIDER` is one flag; the other six capability slots are not actually
+  provider-independent despite living in the same "Layer 2" file — flipping the
+  provider alone, exactly as `portability_swap_check.py`'s own internal swap does,
+  breaks on the very first real call. A genuine migration means rewriting the whole of
+  `cloud.env`, not just one line in it.
+- **What a full migration would cost:** rewriting `cloud.env` is trivial; the real
+  cost is the five AWS methods this task deliberately left unimplemented
+  (`push_image`, `submit_training`/`register_model`, `deploy`, `emit_metric`,
+  `generate`, `teardown`) — each one took a Lab's worth of real engineering time to
+  get right on GCP the first time (Lab 2's training+registry work, Lab 3's deploy+
+  invoke+canary work, Lab 4's monitoring+scheduling work). Call it **8–12 engineering
+  days** for the code alone, scaled from that history. That estimate excludes exactly
+  what consumed the most *calendar* time in this task: an Organization SCP nobody knew
+  existed, and a new-account verification hold — neither one an engineering problem,
+  both of them real migration cost.
+- **Was it worth it?** Partially. The three-layer discipline earns its keep as a
+  *testing* tool — `make portability-audit` catching a leak before it ships is real
+  value, and it cost nothing extra this lab. As a *migration-cost* reducer it did far
+  less than advertised: two of `cloud.env`'s six capability slots turned out to encode
+  provider-specific formats, so "point `cloud.env` at the other provider" is not the
+  one-line change the abstraction implies — a team migrating for real would still need
+  to rewrite config by hand and re-verify every value, same as without the adapter
+  layer. Worth building for the audit; oversold as a migration shortcut.
+
+---
+
 ## Task 5 — Cost estimate, committed before Task 1
 
 Committed **2026-10-23**, before any Lab 5 pipeline/compute step has run.

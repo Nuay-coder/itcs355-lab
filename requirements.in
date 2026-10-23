@@ -22,3 +22,6 @@ google-cloud-aiplatform==2.1.3
 # cloudlayer/pipelines.py::compile_gcp (Lab 5 Task 1) compiles the DAG to a Kubeflow
 # Pipelines spec for Vertex AI Pipelines. Verified locally against kfp 2.17.3.
 kfp==2.17.3
+# cloudlayer/aws.py (Lab 5 Task 4B) implements upload/download/invoke against S3 and
+# Bedrock. Verified locally against boto3 1.43.118.
+boto3==1.43.118
