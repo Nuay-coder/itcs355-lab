@@ -164,8 +164,10 @@ Full six-section report: [`reports/lab5-cost.md`](../../reports/lab5-cost.md).
 
 `make teardown LAB=5` returned `[]`. Checked independently rather than trusting
 that: `gcloud run services list`, `gcloud run jobs list`, and
-`gcloud scheduler jobs list` all came back at 0. Screenshot:
-[`evidence/task6-teardown-cloud-run-jobs-empty.jpg`](evidence/task6-teardown-cloud-run-jobs-empty.jpg).
+`gcloud scheduler jobs list` all came back at 0.
+
+![Cloud Run Jobs list, empty](evidence/task6-teardown-cloud-run-jobs-empty.jpg)
+
 `make test` and `make portability-audit` still pass after teardown.
 
 Left in place on purpose, since it isn't billed: the
