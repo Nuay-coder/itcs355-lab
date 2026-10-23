@@ -230,3 +230,29 @@ Full six-section report (actual billing checked live, gap explained, breakdown,
 cost-per-1,000, and the applied optimisation): [`reports/lab5-cost.md`](../../reports/lab5-cost.md).
 
 ---
+
+## Task 6 — Teardown, verified
+
+`make teardown LAB=5` run — returned `[]` (nothing tagged `lab=5` was still alive;
+everything created during Tasks 2 and 3 was already torn down immediately after each
+test, not left running). Confirmed independently, not just trusting the adapter's own
+return value:
+
+- `gcloud run services list` → 0 items
+- `gcloud run jobs list` → 0 items
+- `gcloud scheduler jobs list` → 0 items
+- Screenshot: [`evidence/task6-teardown-cloud-run-jobs-empty.jpg`](evidence/task6-teardown-cloud-run-jobs-empty.jpg)
+
+`make test` (46 passed) and `make portability-audit` (passed) both still hold after
+teardown.
+
+Left in place, deliberately (not billed resources): `itcs355-lab5-serving@...` (IAM
+service account, Task 2) and `itcs355-lab4-deploy@...`'s new grant on it — the same
+"IAM survives teardown, billed compute doesn't" pattern Lab 4 used.
+
+**24-hour recheck:** per the lab's own warning ("deletion is asynchronous"), `make
+cost-report` should be re-run ~24h after this teardown to confirm nothing reappears
+in billing afterward — not done yet as of this write-up; the first teardown
+confirmation above is same-day.
+
+---
