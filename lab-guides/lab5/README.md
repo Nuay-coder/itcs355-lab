@@ -140,67 +140,91 @@ candidate from being registered once it does.
 **Part A — audit.** `make portability-audit` passes, before and after this task's
 changes: `src`, `service`, `monitoring`, `tests` contain no provider-specific strings.
 
-**Part B — swap.** Chosen second provider: **AWS** (Azure was the original plan, but
-the only Azure account available — a Mahidol student account — has zero subscriptions;
-switching providers mid-task would also have meant starting Task 4B's code from zero,
-so AWS stayed the choice once a usable AWS account existed). Implemented exactly
-`upload`, `download`, `invoke` in `cloudlayer/aws.py`: `upload`/`download` via
-`boto3`'s S3 client against `BLOB_URI`; `invoke` against Bedrock's on-demand
-`InvokeModel` (Claude 3 Haiku — there is no SageMaker endpoint to call, and standing
-one up is explicitly out of scope: "you are not migrating the whole system").
+**Part B — swap.** Chosen second provider: **Azure**. Implemented exactly `upload`,
+`download`, `invoke` in `cloudlayer/azure.py`: `upload`/`download` via
+`azure-storage-blob`'s `BlobServiceClient` against `BLOB_URI`; `invoke` against an
+Azure AI Foundry serverless deployment (`Phi-4-mini-instruct` — there is no Azure ML
+managed online endpoint to call, and standing one up is explicitly out of scope).
+Real resources: a resource group, a storage account + container (Malaysia West —
+see below), and an AI Foundry resource with that one model deployed.
 
-Ran `scripts/portability_swap_check.py --second-provider aws` for real, against a real
-AWS account set up during this task. **Every method failed, and every failure is a
-genuine finding, not a bug in the new code:**
+Ran `scripts/portability_swap_check.py --second-provider azure` for real, against a
+real Azure subscription (Azure for Students) set up during this task:
 
-| Method | Result | Real cause |
-|---|---|---|
-| `upload` | `ParamValidationError: Invalid bucket name "gs:"` | The swap script changes only `provider`, leaving `BLOB_URI` as `gs://itcs355-6688033/itcs355` — a GCS-shaped URI, not S3-shaped. `cloud.env`'s values are *not* provider-neutral despite `provider` being a single flag. |
-| `download` | Same `"gs:"` bucket-name error | Same root cause — `download`'s input URI comes from the same config. |
-| `invoke` | First: `EndpointConnectionError` against `bedrock-runtime.asia-southeast1.amazonaws.com` (not a real AWS endpoint) | `cfg.region` is `asia-southeast1` — GCP's region-naming convention. AWS's equivalent region is `ap-southeast-1`. Region names leak the same way `BLOB_URI`'s scheme does. |
-| `invoke` (region hand-corrected) | `AccessDeniedException: Your account is currently being verified` | Not a code or config problem at all — Bedrock model invocation is held for new AWS accounts pending an automatic fraud-prevention check (AWS's own message: "normally takes less than 2 hours"). |
+```
+  [FAIL            ] upload  ValueError: Please specify a container name and blob name.
+  [FAIL            ] download  ValueError: Please specify a container name and blob name.
+  [PASS            ] invoke
+```
 
-A fourth, separate blocker was found auditing the account before any of this: the AWS
-account itself sits inside an **AWS Organization** with a **Service Control Policy**
-(`arn:aws:organizations::761774876005:policy/.../p-nj126grk`) that explicitly denies
-`s3:CreateBucket` and `s3:ListAllMyBuckets` account-wide — discovered by the user, who
-did not know the account belonged to an Organization at all. No bucket could be created
-to even attempt `upload`/`download` against real S3, independent of the config leaks
-above.
+`invoke` works end-to-end through the swap script itself. `upload`/`download` fail
+because the swap script changes only `provider`, leaving `BLOB_URI` as
+`gs://itcs355-6688033/itcs355` — a GCS-shaped URI that `cloudlayer/azure.py`'s
+`_split_blob_https_uri` (expecting
+`https://<account>.blob.core.windows.net/<container>/...`) can't parse at all. That's
+the swap script working as designed — "if your code needs more than this to switch,
+say so in the write-up, that IS the finding" — not a code bug, so the fix isn't to
+touch the script. Separately, with `BLOB_URI` pointed at the real Azure container
+(what Task 4B actually asks for — "point `cloud.env` at that provider"), both methods
+work:
+
+```
+upload -> https://itcs355lab5myw2285.blob.core.windows.net/itcs355/portability/demo-probe.txt
+download -> itcs355 lab5 portability demonstration
+```
+
+**Setting this up surfaced two more real findings**, both outside the swap script
+itself:
+- Every new resource needed an explicit **data-plane RBAC role** beyond subscription
+  Owner — `Storage Blob Data Contributor` for blobs, `Cognitive Services User` for
+  the AI Foundry deployment. Owner is a management-plane role; Azure keeps data-plane
+  access separate by design, and both role assignments took roughly 90 seconds to
+  propagate before the first calls stopped failing with `AuthorizationPermissionMismatch`.
+- `DefaultAzureCredential()` — the credential this adapter's own docstring recommends
+  ("picks up your CLI login locally and your managed identity in CI") — **hung for
+  over two minutes** against the AI Foundry endpoint specifically, never raising,
+  apparently stuck probing a managed-identity source unreachable from this machine.
+  `upload`/`download` hit the same credential chain and only ever needed the RBAC
+  propagation wait, not this hang — so it's call-shape-specific, not a blanket
+  problem with the credential type. `invoke` now uses `AzureCliCredential()`
+  explicitly instead, documented in code as a deliberate deviation from the stated
+  convention.
+- The subscription also carries a *system* Azure Policy — `sys.regionrestriction`,
+  `createdByType: Application` — allowing deployment only to `japaneast`,
+  `malaysiawest`, `indonesiacentral`, `koreacentral`, `uaenorth`. Fully visible and
+  readable as the subscription's Owner (`az policy assignment list`), which is how
+  the actual allowed region list was found rather than guessed by trial and error.
 
 **Part C — write-up.**
 
-- **Hardest method:** `invoke`, but not for a coding reason — Bedrock's request shape
-  (`messages`/`anthropic_version`/`max_tokens`) has nothing in common with Cloud Run's
-  plain HTTP `/predict`, so `endpoint`/`payload` from the shared `CloudAdapter`
-  interface map onto it only nominally (`endpoint` is accepted and ignored entirely).
-  `upload`/`download` were the easy part, code-wise — boto3's S3 client is a close
-  mirror of `google-cloud-storage`'s.
-- **Where the abstraction genuinely leaked:** `cloud.env`'s `BLOB_URI` and `REGION`
-  are stored as provider-formatted strings (`gs://...`, `asia-southeast1`), not neutral
-  values. `CLOUD_PROVIDER` is one flag; the other six capability slots are not actually
-  provider-independent despite living in the same "Layer 2" file — flipping the
-  provider alone, exactly as `portability_swap_check.py`'s own internal swap does,
-  breaks on the very first real call. A genuine migration means rewriting the whole of
-  `cloud.env`, not just one line in it.
+- **Hardest method:** `upload`/`download` — not the code itself (Azure's
+  `BlobServiceClient` is a close mirror of `google-cloud-storage`'s), but getting the
+  config and RBAC right around it. `invoke` was the one that worked cleanly through
+  the swap script on the first real attempt, once the credential issue was found,
+  despite its request shape (`UserMessage`/`model=`) having nothing in common with
+  Cloud Run's plain HTTP `/predict`.
+- **Where the abstraction genuinely leaked:** `cloud.env`'s `BLOB_URI` is stored as a
+  provider-formatted string (`gs://...`), not a neutral value. `CLOUD_PROVIDER` is
+  one flag; `BLOB_URI` is not actually provider-independent despite living in the
+  same "Layer 2" file — flipping the provider alone, exactly as the swap script's own
+  internal test does, breaks on the very first real call.
 - **What a full migration would cost:** rewriting `cloud.env` is trivial; the real
-  cost is the five AWS methods this task deliberately left unimplemented
+  cost is the five Azure methods this task deliberately left unimplemented
   (`push_image`, `submit_training`/`register_model`, `deploy`, `emit_metric`,
-  `generate`, `teardown`) — each one took a Lab's worth of real engineering time to
-  get right on GCP the first time (Lab 2's training+registry work, Lab 3's deploy+
-  invoke+canary work, Lab 4's monitoring+scheduling work). Call it **8–12 engineering
-  days** for the code alone, scaled from that history. That estimate excludes exactly
-  what consumed the most *calendar* time in this task: an Organization SCP nobody knew
-  existed, and a new-account verification hold — neither one an engineering problem,
-  both of them real migration cost.
+  `generate`, `teardown`), each of which took a Lab's worth of real engineering time
+  to get right on GCP the first time. Call it **8–12 engineering days** for the code
+  alone, plus genuine calendar time for RBAC and credential surprises that don't show
+  up until you actually call something, and for finding the one region set a brand
+  new subscription is actually allowed to deploy into.
 - **Was it worth it?** Partially. The three-layer discipline earns its keep as a
   *testing* tool — `make portability-audit` catching a leak before it ships is real
   value, and it cost nothing extra this lab. As a *migration-cost* reducer it did far
-  less than advertised: two of `cloud.env`'s six capability slots turned out to encode
-  provider-specific formats, so "point `cloud.env` at the other provider" is not the
-  one-line change the abstraction implies — a team migrating for real would still need
-  to rewrite config by hand and re-verify every value, same as without the adapter
-  layer. Worth building for the audit; oversold as a migration shortcut.
+  less than advertised: `BLOB_URI` encodes a provider-specific format, so "point
+  `cloud.env` at the other provider" is not the one-line change the abstraction
+  implies — a team migrating for real would still need to rewrite config by hand,
+  re-verify every value, and discover each provider's own RBAC/region/credential
+  quirks the hard way. Worth building for the audit; oversold as a migration
+  shortcut.
 
 ---
 
@@ -214,7 +238,7 @@ Committed **2026-10-23**, before any Lab 5 pipeline/compute step has run.
 | Ingest/validate/evaluate/register steps | `src/costs.py` e2-standard-4 rate, ~45s each × 4 | 0.32 |
 | Deploy to staging + smoke test | Cloud Run rate as Lab 3/4 | 0.05 |
 | IAM service accounts, Cloud Scheduler | No usage charge / within free tier | 0.00 |
-| AWS portability swap (S3 + on-demand Bedrock invoke, no persistent endpoint) | sub-satang per call | 0.05 |
+| Second-provider portability swap (storage + on-demand model invoke, no persistent endpoint) | sub-satang per call | 0.05 |
 | LLM golden-set calls (~25 `generate()` calls) | `src/llmcost.py` `gcp.small` rate, ~400 in/120 out tokens/call | 0.19 |
 
 **Total estimate: ~0.75 THB.**
