@@ -86,6 +86,55 @@ permission visible in the failure, not a generic 500.
 
 ---
 
+## Task 3 — Scheduled retraining
+
+**Scheduling mechanism, demonstrated live** (same Cloud Scheduler → Cloud Run Jobs
+pattern Lab 4 used for the drift detector): created `itcs355-lab5-trigger` (Cloud Run
+Job, `lab=5`) and `itcs355-lab5-retrain-schedule` (Cloud Scheduler, cron `0 2 * * 0` —
+the exact value in `pipeline/pipeline.yaml`), ran it through the **real scheduler**
+(`gcloud scheduler jobs run ...`, not a direct job execution), and confirmed success:
+`Container called exit(0)` / `SCHEDULED RETRAIN TRIGGER FIRED for provider gcp`. Full
+pipeline submission needs `scripts/register.py`/`scripts/deploy.py`, which are
+deliberately out of scope here (not in the lab's own file list, and `make pipeline`
+itself only compiles) — this demo proves the *trigger path* specifically. Both
+resources deleted immediately after (`adapter.teardown(cfg.tags(5))` +
+`gcloud scheduler jobs delete`); `gcloud run jobs list` / `gcloud scheduler jobs list`
+both confirm zero.
+
+(One real bug hit and fixed along the way: `gcloud run jobs create --args` splits on
+commas, so a Python one-liner with a comma in its `print(...)` call silently got cut
+into three arguments and failed with `SyntaxError: '(' was never closed`. Fixed by
+writing the message as an f-string with no top-level comma.)
+
+**Why `0 2 * * 0` (Sunday 02:00 UTC, weekly):** this system has no real production
+traffic — `src/data.py`'s dataset is a deterministic synthetic generator
+(`N_MACHINES=240`), not a live feed, and nothing in this repo has ever served a real
+request (`reports/lab3-cost.md`). There is no meaningful "data volume" to threshold on
+and no real drift signal to react to. A fixed weekly schedule at a low-traffic hour is
+the only one of the three strategies that doesn't require a live traffic/labelling
+signal this project doesn't have.
+
+**Three strategies, for this system specifically:**
+
+| Strategy | When it is right | How it fails |
+|---|---|---|
+| Fixed schedule | No reliable volume or drift signal to react to yet (true here — no real traffic). Predictable cost, easy to reason about. | Retrains on a schedule even when nothing changed, wasting the training-step cost every cycle; can also miss a fast-moving real shift between runs. |
+| Data volume threshold | A real ingestion pipeline with a steady, known arrival rate — more data = a model worth refreshing. | This project never accumulates new labelled rows at all (`make_dataset.py` regenerates the same fixed-size synthetic set) — the trigger would simply never fire, silently, which is worse than a schedule that at least guarantees periodic review. |
+| Drift-triggered | A live feature-drift signal that's actually trustworthy (Lab 4 built the PSI/KS machinery for exactly this). | **The lab's own warning, concretely true here:** Lab 4 already proved `mix`-mode drift can slip past PSI/KS entirely, and the reverse failure is worse — corrupted upstream data (a sensor fault, a unit conversion bug) produces a *real* PSI spike that looks like "retrain now," and an automatic retrain on that corrupted batch bakes the corruption into a newly "validated" model faster than a human would ever approve it on a fixed schedule. |
+
+**Chosen: fixed schedule.** Not because it's the best strategy in general — because this
+project has neither the traffic volume nor a trustworthy-enough drift signal (per Lab
+4's own `mix`-mode finding) to justify the other two yet. **Worst case:** a real
+upstream corruption appears between two Sunday runs and sits undetected for up to a
+week before the next scheduled retrain either catches it (if the gate's metric floor
+rejects the corrupted candidate) or — if the corruption is subtle enough to still clear
+`MIN_ABSOLUTE`/`MIN_IMPROVEMENT` — gets promoted. This is exactly why Task 1's gate
+compares against the registry incumbent rather than trusting any single run: a fixed
+schedule bounds *when* a bad retrain could happen, but only the gate stops a bad
+candidate from being registered once it does.
+
+---
+
 ## Task 5 — Cost estimate, committed before Task 1
 
 Committed **2026-10-23**, before any Lab 5 pipeline/compute step has run.
