@@ -319,6 +319,7 @@ class GcpAdapter(CloudAdapter):
         self, endpoint: str, image_uri: str, cpu: str, memory: str,
         env: dict[str, str], max_instances: int, concurrency: int,
         revision_suffix: str | None, lab: int = 3,
+        service_account: str | None = None,
     ) -> dict[str, Any]:
         """Knative Service manifest for `gcloud run services replace`. Declarative and
         create-or-update by construction — the same manifest applied twice just updates
@@ -332,6 +333,12 @@ class GcpAdapter(CloudAdapter):
         unchanged. Lab 4's CD workflow deploys a second, staging-only Cloud Run service
         and passes `lab=4` so `make teardown LAB=4` can find and delete it independently
         of Lab 3's resources.
+
+        `service_account` defaults to `self.cfg.training_service_account` when omitted
+        — the behaviour every caller before Lab 5 relied on. Lab 5 Task 2 is exactly the
+        finding that this default is too broad for serving (the training identity holds
+        project-wide `storage.objectAdmin`, not scoped read access to one model) — pass
+        a dedicated serving identity explicitly instead of accepting the default.
         """
         labels = self.cfg.tags(lab)
         template_metadata: dict[str, Any] = {
@@ -353,7 +360,7 @@ class GcpAdapter(CloudAdapter):
                     "metadata": template_metadata,
                     "spec": {
                         "containerConcurrency": concurrency,
-                        "serviceAccountName": self.cfg.training_service_account,
+                        "serviceAccountName": service_account or self.cfg.training_service_account,
                         "containers": [{
                             "image": image_uri,
                             "ports": [{"containerPort": 8080}],
@@ -411,6 +418,7 @@ class GcpAdapter(CloudAdapter):
         self, model_ref: str, endpoint: str, instance: str, *,
         image_uri: str, max_instances: int = 2, concurrency: int = 80,
         revision_suffix: str | None = None, lab: int = 3,
+        service_account: str | None = None,
     ) -> str:
         """Deploy the serving image to Cloud Run, wired to one registered model version.
 
@@ -470,7 +478,7 @@ class GcpAdapter(CloudAdapter):
 
         manifest = self._service_manifest(
             endpoint, image_uri, cpu, memory, env, max_instances, concurrency, revision_suffix,
-            lab=lab,
+            lab=lab, service_account=service_account,
         )
         with tempfile.TemporaryDirectory() as tmp:
             manifest_path = Path(tmp) / "service.yaml"

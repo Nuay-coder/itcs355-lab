@@ -37,6 +37,55 @@ all, and not installed before this lab.
 
 ---
 
+## Task 2 — Least privilege, properly
+
+**Audit first.** Before changing anything: `itcs355-lab2-training@...` (training,
+Lab 2) held project-wide `roles/storage.objectAdmin`, and — found while auditing —
+`cloudlayer/gcp.py::_service_manifest` hardcoded `serviceAccountName` to that same
+training identity for every Cloud Run deploy. **Serving was running as training**, with
+write access to the whole bucket, since Lab 3. No standing `serviceAccountTokenCreator`
+grant existed on it despite that being my first guess — Lab 3's teardown already
+removed it, and `scripts/run_loadtest.py` only grants/revokes it transiently around a
+load test — so there was nothing to trim there.
+
+**Three identities:**
+
+| Identity | Account | Can do | Why |
+|---|---|---|---|
+| Training | `itcs355-lab2-training@...` (existing, Lab 2) | `storage.objectAdmin` (project-wide) | Unchanged — reads raw data, writes model artifacts + metrics. Broader than ideal (whole project, not a prefix) but out of scope for this pass; not touched to avoid disturbing Lab 2/3 evidence. |
+| **Serving (new)** | `itcs355-lab5-serving@...` | `storage.objectViewer` **scoped to the `itcs355/models/` prefix only** (IAM condition on the bucket), `logging.logWriter`, `monitoring.metricWriter` | Cloud Run now deploys with `--service-account` set to this identity (`cloudlayer/gcp.py::deploy`'s new `service_account` param, defaults to the old training-SA behaviour only when omitted). Can read exactly the model path it was deployed with, nothing else in the bucket, and cannot touch Vertex AI at all. |
+| CI | `itcs355-lab4-deploy@...` (existing, Lab 4) | `artifactregistry.writer`, `run.admin`, `aiplatform.viewer`, `monitoring.metricWriter`, plus (new) `iam.serviceAccountUser` on the serving SA | Unchanged role set from Lab 4, plus the one new grant needed to deploy *as* the serving identity. |
+
+**The assessed part: removed a permission, confirmed what broke.**
+
+1. Deployed a throwaway Cloud Run service (`itcs355-lab5-serving-test`, `lab=5`) with
+   the new serving SA, pointed at the real production model
+   (`...models/437231793901404160@production`). `/predict` worked:
+   `{'prediction': 0, 'probability': 0.0130, 'model_version': '437231793901404160-v1', ...}`.
+2. Revoked the serving SA's `storage.objectViewer` binding, then deployed a new
+   revision (forces a cold start, so the container must re-download the model).
+   **It failed.** `gcloud run services replace` returned "container failed the
+   configured startup probe checks" — Cloud Run logs show the real cause directly:
+   ```
+   403 GET https://storage.googleapis.com/download/storage/v1/b/itcs355-6688033/o/itcs355%2Fmodels%2Flab2%2F2017ed98238142c89798d0db9b046bee%2Fmodel.joblib?alt=media:
+   itcs355-lab5-serving@itcs355-6688033.iam.gserviceaccount.com does not have
+   storage.objects.get access to the Google Cloud Storage object.
+   ```
+   `service/app.py`'s `_load_model()` runs inside the FastAPI lifespan, so the missing
+   permission surfaces as a failed readiness probe, not a crash — `/ready` returned
+   `{"status": "not_ready", "reason": "model not loaded"}` for 30 straight checks before
+   Cloud Run gave up on the revision.
+3. Restored the binding, redeployed, confirmed `/predict` works again with the same
+   response as step 1.
+4. Deleted the throwaway service (`make`-equivalent `adapter.teardown(cfg.tags(5))`),
+   confirmed `gcloud run services list` returns zero.
+
+**What this proves:** the scoping is real, not cosmetic — take away the one grant this
+identity actually needs and the service cannot start, with the exact missing
+permission visible in the failure, not a generic 500.
+
+---
+
 ## Task 5 — Cost estimate, committed before Task 1
 
 Committed **2026-10-23**, before any Lab 5 pipeline/compute step has run.

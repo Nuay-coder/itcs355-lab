@@ -32,6 +32,12 @@ def main() -> int:
     ap.add_argument("--max-instances", type=int, default=2)
     ap.add_argument("--concurrency", type=int, default=80)
     ap.add_argument("--revision-suffix", default=None)
+    ap.add_argument("--lab", type=int, default=3, help="tags the service `lab=<N>` for teardown scoping")
+    ap.add_argument("--service-account", default=None,
+                     help="Lab 5 Task 2: a dedicated serving identity. Omit to fall back "
+                          "to TRAINING_SERVICE_ACCOUNT (Lab 3/4 behaviour) — that default "
+                          "is the broad-permission case Task 2 replaces, not a good one "
+                          "to keep accepting silently.")
     ap.add_argument("--yes", action="store_true", help="actually create/update the resource")
     args = ap.parse_args()
 
@@ -46,8 +52,8 @@ def main() -> int:
     print(f"  instance:        {args.instance}  (cpu-memory)")
     print(f"  scaling:         min=0 (scale-to-zero), max={args.max_instances}, "
           f"concurrency={args.concurrency}")
-    print(f"  service account: {cfg.training_service_account}")
-    print(f"  labels:          {cfg.tags(3)}")
+    print(f"  service account: {args.service_account or cfg.training_service_account}")
+    print(f"  labels:          {cfg.tags(args.lab)}")
     print("  estimated cost:  ~0 THB/hr while idle (scale-to-zero); ~4.2 THB/hr ONLY "
           "while actively serving nonstop at this instance size (est., verify with the "
           "GCP pricing calculator)")
@@ -64,6 +70,7 @@ def main() -> int:
         f"{args.model}@{args.version}", args.endpoint, args.instance,
         image_uri=image_uri, max_instances=args.max_instances,
         concurrency=args.concurrency, revision_suffix=args.revision_suffix,
+        service_account=args.service_account, lab=args.lab,
     )
     print(f"deployed: {name} -> {adapter.service_url(name)}")
     return 0
