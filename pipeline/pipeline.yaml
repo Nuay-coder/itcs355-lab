@@ -41,8 +41,10 @@ steps:
     command: ["python", "scripts/register.py"]
     depends_on: [evaluate]
     condition: "gate_decision == 'pass'"
-    # TODO(Lab 5): a pipeline that registers unconditionally has no gate. The condition
-    # must be real, and the grader will try to make it fail.
+    # Wired for real in cloudlayer/pipelines.py::compile_gcp — `evaluate`'s own
+    # --gate-decision-out output becomes a KFP output, and this step (plus
+    # deploy_staging, which depends on it) only runs inside a dsl.If on that output.
+    # A candidate that fails evaluation_gate.py genuinely does not reach register.
 
   - name: deploy_staging
     image: "${CONTAINER_REGISTRY}/itcs355:${IMAGE_TAG}"

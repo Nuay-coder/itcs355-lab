@@ -209,13 +209,16 @@ celery==5.6.3 \
     # via
     #   dvc
     #   dvc-task
-certifi==2026.7.22 \
-    --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775 \
-    --hash=sha256:741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55
+certifi==2026.10.19 \
+    --hash=sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae \
+    --hash=sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b
     # via
     #   google-cloud-aiplatform
     #   httpcore
     #   httpx
+    #   kfp
+    #   kfp-server-api
+    #   kubernetes
     #   requests
 cffi==2.1.1 \
     --hash=sha256:046bfc24911b37851ee1b51aab8bffe713d89c68c6a057b09484ce9fd5f69b4e \
@@ -501,16 +504,22 @@ click==8.5.0 \
     # via
     #   celery
     #   click-didyoumean
+    #   click-option-group
     #   click-plugins
     #   click-repl
     #   flask
     #   gto
+    #   kfp
     #   mlflow-skinny
     #   uvicorn
 click-didyoumean==0.3.1 \
     --hash=sha256:4f82fdff0dbe64ef8ab2279bd6aa3f6a99c3b28c05aa09cbfc07c9d7fbb5a463 \
     --hash=sha256:5c4bb6007cfea5f2fd6583a2fb6701a22a41eb98957e63d0fac41c10e7c3117c
     # via celery
+click-option-group==0.5.7 \
+    --hash=sha256:8dc780be038712fc12c9fecb3db4fe49e0d0723f9c171d7cda85c20369be693c \
+    --hash=sha256:96b9f52f397ef4d916f81929bd6c1f85e89046c7a401a64e72a61ae74ad35c24
+    # via kfp
 click-plugins==1.1.1.2 \
     --hash=sha256:008d65743833ffc1f5417bf0e78e8d2c23aab04d9745ba817bd3e71b0feb6aa6 \
     --hash=sha256:d7af3984a99d243c131aa1a828331e7630f4a88a9741fd05c927b204bcf92261
@@ -655,6 +664,7 @@ cryptography==50.0.1 \
     # via
     #   asyncssh
     #   google-auth
+    #   kfp
     #   mlflow
 cycler==0.12.1 \
     --hash=sha256:85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30 \
@@ -692,7 +702,9 @@ docker==7.2.0 \
 docstring-parser==0.18.0 \
     --hash=sha256:292510982205c12b1248696f44959db3cdd1740237a968ea1e2e7a900eeb2015 \
     --hash=sha256:b3fcbed555c47d8479be0796ef7e19c2670d428d72e96da63f3a40122860374b
-    # via google-cloud-aiplatform
+    # via
+    #   google-cloud-aiplatform
+    #   kfp
 dpath==2.2.0 \
     --hash=sha256:34f7e630dc55ea3f219e555726f5da4b4b25f2200319c8e6902c394258dd6a3e \
     --hash=sha256:b330a375ded0a0d2ed404440f6c6a715deae5313af40bbb01c8a41d891900576
@@ -1072,6 +1084,7 @@ google-api-core==2.37.0 \
     #   google-cloud-resource-manager
     #   google-cloud-storage
     #   google-cloud-storage-control
+    #   kfp
 google-auth==2.58.0 \
     --hash=sha256:55e30cf15e737de92c5323d78cda8a83fcd57e7ffbaf900c4600039fd60a80fd \
     --hash=sha256:8a9c4645bb4c8e91668fb1934b95ae6a8687084232753639220ba9bf04a1610d
@@ -1087,6 +1100,8 @@ google-auth==2.58.0 \
     #   google-cloud-storage
     #   google-cloud-storage-control
     #   google-genai
+    #   kfp
+    #   kubernetes
 google-auth-oauthlib==1.4.1 \
     --hash=sha256:1a83f5f2a8421dedadaa3caf25b3a710dddf85a33a63144be41c2fc79174b106 \
     --hash=sha256:a1be43ec69fe563ac9b2c4d6fc4334b323b21cbdc59a638b5fa34dd4d5a2a348
@@ -1115,6 +1130,7 @@ google-cloud-storage==3.14.1 \
     # via
     #   gcsfs
     #   google-cloud-aiplatform
+    #   kfp
 google-cloud-storage-control==1.15.0 \
     --hash=sha256:46c8c801ff0425a1bd59bc28899a8242e15f6bbb06a4f2304cbd169c7d26cb29 \
     --hash=sha256:e3d50276f0aed0c33ebcf3c6221e933889e042df70a56886ddffe59c66889183
@@ -1425,6 +1441,17 @@ joblib==1.4.2 \
     # via
     #   -r requirements.in
     #   scikit-learn
+kfp==2.17.3 \
+    --hash=sha256:13f365673ba419efd8c90382b4a2bbac80a6702254c27e64ce4745ec8d4f7b47 \
+    --hash=sha256:43982a70c8b3f9c47a818f2946e4d0cb3a21ee59935163644939956b9e0793aa
+    # via -r requirements.in
+kfp-pipeline-spec==2.17.3 \
+    --hash=sha256:b59d7efc2bcd3ee49cee85023a5280ae38e9f7825d09ac2167c8c0b130a4ea5a \
+    --hash=sha256:f0703cbf97891b6884a0230a1e72256367ccd03d8177581f6ed5b168fbfa1a64
+    # via kfp
+kfp-server-api==2.17.3 \
+    --hash=sha256:bae229d12bfca09cb7992d0db6f89e4d0facbf274cd8d1597bb93a714dd4aa86
+    # via kfp
 kiwisolver==1.5.1 \
     --hash=sha256:007a5553dfc4f4e8d184f588a0200e2cd4b63a59cc8796df3c39909e679dc7a0 \
     --hash=sha256:0324cd2567259b7a095f6cf18a52b0ffc6f3de9e69528ff1bc0e7a37bd43ff1a \
@@ -1575,6 +1602,10 @@ kombu==5.6.2 \
     #   celery
     #   dvc
     #   dvc-task
+kubernetes==30.1.0 \
+    --hash=sha256:41e4c77af9f28e7a6c314e3bd06a8c6229ddd787cad684e0ab9f69b498e98ebc \
+    --hash=sha256:e212e8b7579031dd2e512168b617373bc1e03888d41ac4e04039240a292d478d
+    # via kfp
 mako==1.4.1 \
     --hash=sha256:a359d9a94a541213958742b2698d0a7757bb83551767bc468a74b9905aba9617 \
     --hash=sha256:d7904710b662996425a21627710c4777c45053146942cf8a7aebf757c92b8c27
@@ -2010,10 +2041,13 @@ numpy==2.4.4 \
     #   scikit-learn
     #   scipy
     #   skops
-oauthlib==3.3.1 \
-    --hash=sha256:0f0f8aa759826a193cf66c12ea1af1637f87b9b4622d46e866952bb022e538c9 \
-    --hash=sha256:88119c938d2b8fb88561af5f6ee0eec8cc8d552b7bb1f712743136eb7523b7a1
-    # via requests-oauthlib
+oauthlib==4.0.0 \
+    --hash=sha256:624c28c13a0a59cabf9747dfa52af63be3e512a7f2714df16e91b5b3a145e6cd \
+    --hash=sha256:efb274799819440f95b4ab3b818869f1ce9ae26c5beacba0201d1a1b76b54f86
+    # via
+    #   kfp
+    #   kubernetes
+    #   requests-oauthlib
 omegaconf==2.3.1 \
     --hash=sha256:3d701d14e9a8828f1edd28bb70b725908b34277cdd72cf7d6a83f94dadc6b6a0 \
     --hash=sha256:e5e7de64aeebeddaf8e6d3f7a783b32ac2a01c0fbd9c878012caecb891a1f42a
@@ -2444,6 +2478,8 @@ protobuf==6.33.6 \
     #   googleapis-common-protos
     #   grpc-google-iam-v1
     #   grpcio-status
+    #   kfp
+    #   kfp-pipeline-spec
     #   mlflow-skinny
     #   mlflow-tracing
     #   opentelemetry-proto
@@ -2521,7 +2557,9 @@ pyarrow==25.0.1 \
 pyasn1==0.6.4 \
     --hash=sha256:9c447d8431c947fe4c8febc4ed9e760bc29011a5b01e5c74b67025bd9fb8ce81 \
     --hash=sha256:deda9277cfd454080ec40b207fb6df82206a3a2688735233cdcd8d3d565f088b
-    # via pyasn1-modules
+    # via
+    #   kfp
+    #   pyasn1-modules
 pyasn1-modules==0.4.2 \
     --hash=sha256:29253a9207ce32b64c3ac6600edc75368f98473906e8fd1043bd6b5b1de2c14a \
     --hash=sha256:677091de870a80aae844b1ca6134f54652fa2c8c5a52aa396440ac3106e941e6
@@ -2772,6 +2810,8 @@ python-dateutil==2.9.0.post0 \
     #   celery
     #   google-cloud-bigquery
     #   graphene
+    #   kfp-server-api
+    #   kubernetes
     #   matplotlib
     #   pandas
 python-dotenv==1.2.3 \
@@ -2856,11 +2896,13 @@ pyyaml==6.0.3 \
     --hash=sha256:fc09d0aa354569bc501d4e787133afc08552722d3ab34836a80547331bb5d4a0
     # via
     #   -r requirements.in
+    #   kfp
+    #   kubernetes
     #   mlflow-skinny
     #   omegaconf
-requests==2.34.2 \
-    --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
-    --hash=sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed
+requests==2.33.0 \
+    --hash=sha256:3324635456fa185245e24865e810cecec7b4caf933d7eb133dcde67d48cee69b \
+    --hash=sha256:c7ebc5e8b0f21837386ad0e1c8fe8b829fa5f544d8df3b2253bff14ef29d7652
     # via
     #   databricks-sdk
     #   docker
@@ -2873,12 +2915,21 @@ requests==2.34.2 \
     #   google-cloud-storage
     #   google-genai
     #   iterative-telemetry
+    #   kfp
+    #   kubernetes
     #   mlflow-skinny
     #   requests-oauthlib
+    #   requests-toolbelt
 requests-oauthlib==2.0.0 \
     --hash=sha256:7dd8a5c40426b779b0868c404bdef9768deccf22749cde15852df527e6269b36 \
     --hash=sha256:b3dffaebd884d8cd778494369603a9e7b58d29111bf6b41bdc2dcd87203af4e9
-    # via google-auth-oauthlib
+    # via
+    #   google-auth-oauthlib
+    #   kubernetes
+requests-toolbelt==1.0.0 \
+    --hash=sha256:7681a0a3d047012b5bdc0ee37d7f8f07ebe76ab08caeccfc3921ce23c88d5bc6 \
+    --hash=sha256:cccfdd665f0a24fcf4726e690f65639d272bb0637b9b92dfd91a5568ccf6bd06
+    # via kfp
 rich==15.0.0 \
     --hash=sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb \
     --hash=sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36
@@ -3046,7 +3097,10 @@ shtab==1.12.1 \
 six==1.17.0 \
     --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
     --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81
-    # via python-dateutil
+    # via
+    #   kfp-server-api
+    #   kubernetes
+    #   python-dateutil
 skops==0.14.0 \
     --hash=sha256:60a5db78a9db46ccee2139a0ba13ab5afb1c96f4749b382e75a371291bbe3e36 \
     --hash=sha256:6c8c0e047f691a3a582c3258943eecafcbfd79c8c7eef66260f3703e363254f0
@@ -3135,6 +3189,7 @@ tabulate==0.10.0 \
     # via
     #   dvc
     #   gto
+    #   kfp
 tenacity==9.1.4 \
     --hash=sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55 \
     --hash=sha256:adb31d4c263f2bd041081ab33b498309a57c77f9acf2db65aadf0898179cf93a
@@ -3202,13 +3257,16 @@ tzlocal==5.4.4 \
     --hash=sha256:8dbb8660838688a7b6ba4fed31d18dedf842afb4d47ca050d6d891c2c15f3be4 \
     --hash=sha256:aae09f0126a8a86fa736be266eb4a471380d26a0de3bc14844e7821fee3e2a15
     # via celery
-urllib3==2.7.0 \
-    --hash=sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c \
-    --hash=sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897
+urllib3==2.8.0 \
+    --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3 \
+    --hash=sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63
     # via
     #   databricks-sdk
     #   docker
     #   dulwich
+    #   kfp
+    #   kfp-server-api
+    #   kubernetes
     #   requests
 uvicorn==0.52.4 \
     --hash=sha256:73acfee47a0b133c5de13d219492d62d8a31e935f4fe6e41a232451a15379f86 \
@@ -3233,6 +3291,10 @@ wcwidth==0.8.3 \
     # via
     #   prettytable
     #   prompt-toolkit
+websocket-client==1.9.2 \
+    --hash=sha256:0fcb57545848be86992e128218fd96dd87a6769ffdb1a968dff79632b85604d0 \
+    --hash=sha256:e1a673830a9c7bfa47b1cd3d5e4178f4c9651d80a4eab02c9c23a1c3ec6250ce
+    # via kubernetes
 websockets==16.1.1 \
     --hash=sha256:01fbdcbac298efe19360b94bc0039c8f746f0220ba570f327577bfee81059175 \
     --hash=sha256:024193f8551a2b0eafbdd160911012c4e6c228c28430c84433253299a9e42d6a \

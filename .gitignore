@@ -13,6 +13,10 @@ mlflow.db
 
 reports/*.json
 reports/*.joblib
+
+# Build output of `make pipeline` (cloudlayer/pipelines.py::compile_gcp) — regenerated
+# from pipeline/pipeline.yaml, not source.
+pipeline/compiled/
 __pycache__/
 *.pyc
 .pytest_cache/
