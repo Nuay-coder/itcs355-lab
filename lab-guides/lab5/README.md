@@ -137,9 +137,7 @@ show up), oversold as something that makes migration itself cheap.
 
 ---
 
-## Task 5 — Cost estimate, committed before Task 1
-
-Committed 2026-10-23, before any Lab 5 compute ran.
+## Task 5 — Cost estimate
 
 | Component | THB |
 |---|---|
@@ -152,9 +150,8 @@ Committed 2026-10-23, before any Lab 5 compute ran.
 
 **Total estimate: ~0.75 THB.**
 
-Checked directly in Billing afterward (charge period, 2026-08-01 to 2026-10-23,
-whole account): THB 21.29 gross usage cost, THB 0.00 net — fully covered by
-free-trial credits, about 2.7% of the 800 THB term budget.
+Checked directly in Billing afterward: THB 26.83 gross usage cost, THB 0.00 net — fully covered by
+free-trial credits, about 3.4% of the 800 THB term budget.
 
 Full six-section report: [`reports/lab5-cost.md`](../../reports/lab5-cost.md).
 
@@ -173,8 +170,8 @@ that: `gcloud run services list`, `gcloud run jobs list`, and
 Left in place on purpose, since it isn't billed: the
 `itcs355-lab5-serving@...` service account and its grant.
 
-Haven't done the 24-hour recheck (`make cost-report` re-run) yet as of this
-write-up.
+24-hour recheck done: no resources reappeared. Full figure in
+[`reports/lab5-cost.md`](../../reports/lab5-cost.md).
 
 ---
 

@@ -6,26 +6,33 @@ Provider `gcp` · instance `1-512Mi` · 4.23 THB/hour
 0.75 THB
 
 ## 2. Actual, from billing filtered by tag
-0.00 THB
+0.27 THB gross usage cost (THB 0.00 net — fully covered by free-trial credits)
 
 ## 3. The gap
--0.75 THB (-100.0%)
+-0.48 THB (-64.0%)
 
-Checked 2026-10-23 in the GCP Billing Console (Cost breakdown, 2026-10-01 to
-2026-10-23, project `itcs355-6688033`, label `lab`): no cost reported under `lab=5`
-yet — only `lab=2/3/4` appear. Billing has a reporting lag (Lab 4's cost report noted
-the same), and every Lab 5 GCP resource lived minutes, not hours. `0.00` is what the
-Console shows today, not an estimate.
+Smaller than estimated, not bigger: the estimate's two largest line items — the
+train/ingest/validate/register pipeline steps (0.46 THB) and the LLM golden-set
+calls (0.19 THB) — together account for 0.65 THB of the 0.75 THB estimate, and
+neither shows up here. Training/pipeline is explained: Task 1 only compiled the
+pipeline locally and never submitted it to Vertex, so that cost genuinely never
+happened. The missing LLM cost is less certain — generative API usage may not
+carry the same resource label this report filters on, or may be billed through a
+path this view doesn't capture: stated as what's uncertain rather than guessed at.
 
 ## 4. Breakdown by component
 | Component | THB | Notes |
 |---|---|---|
 | Training | 0.00 | Task 1 only compiles the pipeline locally; nothing ran on Vertex |
 | Storage | 0.00 | No new uploads on the GCP side |
-| Serving | ~0 (not yet in Billing) | One throwaway Cloud Run service (Task 2), ~10 min total |
+| Serving | ~0.14 | Cloud Run service time (Task 2's throwaway test deploys) |
 | Pipeline | 0.00 | Compile-only |
 | Monitoring | 0.00 | `emit_metric` not exercised |
-| Scheduler/Jobs | ~0 (not yet in Billing) | Task 3's Cloud Run Job ran 3×, each under a minute; Scheduler itself free |
+| Scheduler/Jobs | 0.13 | Cloud Run Jobs CPU (Task 3's retrain trigger, 3 executions) |
+
+All of it is Cloud Run — confirmed directly in Billing's own breakdown (`Group by
+Service`), which attributed the full 0.27 THB to Cloud Run, with the `Jobs CPU` SKU
+alone responsible for 0.13 THB of it.
 
 ## 5. Cost per 1,000 predictions
 Measured throughput: 96.5 req/s
